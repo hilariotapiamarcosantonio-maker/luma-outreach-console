@@ -3,10 +3,12 @@ export type NicheKey =
   | "developers"
   | "academy"
   | "beauty"
+  | "commerce"
   | "route_products"
   | "printing_graphics"
   | "professional_services"
   | "b2b_services"
+  | "content_monetization"
   | "unknown";
 
 export type RecommendedChannel =

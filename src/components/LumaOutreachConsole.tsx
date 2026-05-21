@@ -40,7 +40,8 @@ import {
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { DEFAULT_WORKSPACE, getWorkspaceConfig, type WorkspaceConfig } from "@/config/workspaces";
-import { IMPLEMENTATION_OFFERS, NICHES, UNKNOWN_NICHE, getNicheDefinition } from "@/data/niches";
+import { NICHES, UNKNOWN_NICHE, getNicheDefinition } from "@/data/niches";
+import { PRODUCT_CATALOG } from "@/data/products";
 import { inferCampaignName, parseRowsToContacts, UNIFIED_LEAD_FIELDS } from "@/lib/leadImport";
 import {
   cleanPhone,
@@ -51,6 +52,7 @@ import {
   getEmailSubject,
   getLeadBusinessName,
   getLeadCity,
+  getLeadDemo,
   getLeadOffer,
   getLeadPain,
   getLeadOpportunity,
@@ -1471,6 +1473,7 @@ export function LumaOutreachConsole({
     const emailSubject = getEmailSubject(lead);
     const emailMessage = getChannelMessage(lead, "email");
     const notes = lead.notas || lead.notes || "";
+    const demo = getLeadDemo(lead);
     const whatsappNumber = getLeadWhatsAppNumber(lead);
     const phoneNumber = getLeadPhoneNumber(lead);
     const emailAddress = lead.correo || lead.email || "";
@@ -1560,11 +1563,12 @@ export function LumaOutreachConsole({
         )}
 
         {!compact && (
-          <div className="mt-5 grid gap-3 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
             <InfoBlock title="Senal comercial" value={getLeadSignal(lead)} />
             <InfoBlock title="Dolor probable" value={getLeadPain(lead)} />
             <InfoBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} />
             <InfoBlock title="Oferta / angulo" value={`${getLeadOffer(lead)}\n${lead.angulo_contacto || lead.contactAngle || "Angulo pendiente."}`} />
+            <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
             <InfoBlock title="Reporte Luma" value={getReportDisplay(lead)} />
           </div>
         )}
@@ -1748,7 +1752,10 @@ export function LumaOutreachConsole({
                 <p className="luma-kicker">{niche.label}</p>
                 <h3 className="mt-2 text-xl font-semibold text-[var(--luma-ivory)]">{niche.shortLabel}</h3>
                 <p className="mt-2 text-sm text-[var(--luma-muted)]">{niche.offer}</p>
-                <Badge className="mt-3 border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{niche.ticket}</Badge>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{niche.ticket}</Badge>
+                  <Badge className="border-white/10 bg-white/[0.04] text-white/60">Demo: {niche.demoLabel}</Badge>
+                </div>
               </div>
               <div className="flex gap-2">
                 <ActionButton icon={Flame} onClick={() => { setNicheFilter(niche.key); setActiveView("today"); }}>
@@ -2214,12 +2221,15 @@ export function LumaOutreachConsole({
           title="Propuestas"
           body="Propuestas de implementacion Luma Premium: oferta, ticket, siguiente paso y material comercial. No es una seccion para presentar propiedades."
         />
-        <div className="grid gap-4 xl:grid-cols-4">
-          {IMPLEMENTATION_OFFERS.map((offer) => (
-            <div key={offer.offer} className="luma-panel p-4">
-              <p className="text-sm font-semibold text-[var(--luma-ivory)]">{offer.offer}</p>
-              <p className="mt-2 text-sm text-[var(--luma-muted)]">{offer.nicheLabel}</p>
-              <Badge className="mt-3 border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{offer.ticket}</Badge>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {PRODUCT_CATALOG.map((product) => (
+            <div key={product.key} className="luma-panel p-4">
+              <p className="text-sm font-semibold text-[var(--luma-ivory)]">{product.name}</p>
+              <p className="mt-2 text-sm text-[var(--luma-muted)]">{product.nicheLabel}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{product.ticket}</Badge>
+                <Badge className="border-white/10 bg-white/[0.04] text-white/60">{product.demo.label}</Badge>
+              </div>
             </div>
           ))}
         </div>
@@ -2233,16 +2243,18 @@ export function LumaOutreachConsole({
             {leads.map((lead) => {
               const niche = getNicheDefinition(resolveLeadNiche(lead));
               const ticket = getLeadTicket(lead);
+              const demo = getLeadDemo(lead);
               const summary = [
                 `Prospecto: ${getLeadBusinessName(lead)}`,
                 `Nicho: ${niche.shortLabel}`,
                 `Oferta recomendada: ${getLeadOffer(lead)}`,
                 `Ticket sugerido: ${ticket}`,
+                `Demo asociada: ${demo.label} - ${demo.url}`,
                 `Estado: ${statusLabel(lead.status)}`,
                 `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
                 `Nota comercial: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
                 `Link propuesta: ${visibleValue(lead.propuesta_link)}`,
-                `Link material o demo: ${visibleValue(lead.material_link)}`,
+                `Link material o demo: ${visibleValue(lead.material_link || demo.url)}`,
                 `Monto estimado: ${visibleValue(lead.monto_estimado)}`,
               ].join("\n");
 
@@ -2253,12 +2265,14 @@ export function LumaOutreachConsole({
                       <div className="flex flex-wrap gap-2">
                         <LeadStatusBadge status={lead.status} />
                         <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{ticket}</Badge>
+                        <Badge className="border-white/10 bg-white/[0.04] text-white/60">{demo.label}</Badge>
                       </div>
                       <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
                       <p className="mt-1 text-sm text-[var(--luma-muted)]">{getLeadPersonName(lead)} - {niche.shortLabel}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <ActionButton icon={Copy} onClick={() => copyText(summary, "Resumen de propuesta")}>Copiar resumen de propuesta</ActionButton>
+                      <ActionButton icon={ExternalLink} onClick={() => window.open(demo.url, "_blank", "noopener,noreferrer")}>Abrir demo</ActionButton>
                       <ActionButton onClick={() => saveProposalLink(lead, "propuesta_link", "link de propuesta")}>Guardar link de propuesta</ActionButton>
                       <ActionButton onClick={() => saveProposalLink(lead, "material_link", "link de material o demo")}>Guardar link de material/demo</ActionButton>
                       <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", getRecommendedChannel(lead))}>Marcar enviada</ActionButton>
@@ -2273,11 +2287,12 @@ export function LumaOutreachConsole({
                     <InfoBlock title="Nicho" value={niche.shortLabel} />
                     <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
                     <InfoBlock title="Ticket sugerido" value={ticket} />
+                    <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
                     <InfoBlock title="Estado de propuesta" value={statusLabel(lead.status)} />
                     <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
                     <InfoBlock title="Nota comercial" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
                     <InfoBlock title="Link propuesta" value={visibleValue(lead.propuesta_link)} />
-                    <InfoBlock title="Link material o demo" value={visibleValue(lead.material_link)} />
+                    <InfoBlock title="Link material o demo" value={visibleValue(lead.material_link || demo.url)} />
                     <InfoBlock title="Monto estimado" value={visibleValue(lead.monto_estimado)} />
                     <InfoBlock title="Fecha propuesta" value={formatDate(lead.fecha_propuesta)} />
                     <InfoBlock title="Decision status" value={visibleValue(lead.decision_status)} />

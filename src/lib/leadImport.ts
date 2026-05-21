@@ -1,4 +1,5 @@
 import { Contact, ContactStatus, NicheKey, RecommendedChannel, ImportReport } from "@/types";
+import { getDefaultProductForNiche, getProductByKey } from "@/data/products";
 import {
   cleanPhone,
   getFallbackConsultativeMessage,
@@ -412,20 +413,25 @@ function isBrokerAgentWithoutWebRow(niche: NicheKey, row: Row, web: string, audi
   );
 }
 
+function isPhotographyQuoteRow(row: Row) {
+  const text = normalizeText(row.join(" "));
+  return (
+    text.includes("fotograf") &&
+    (text.includes("cotiz") ||
+      text.includes("proyecto") ||
+      text.includes("evento") ||
+      text.includes("brief") ||
+      text.includes("paquete") ||
+      text.includes("sesion") ||
+      text.includes("archivo"))
+  );
+}
+
 function fallbackOffer(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
-  if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) return "Luma Estate OS Starter";
-  const offers: Record<NicheKey, string> = {
-    real_estate: "Luma Estate OS Foundation",
-    developers: "Landing Proyecto + CRM + Dashboard",
-    academy: "Academia OS",
-    beauty: "Luma Beauty OS",
-    route_products: "Luma Route OS",
-    printing_graphics: "Luma B2B Quote OS",
-    professional_services: "Luma Professional OS",
-    b2b_services: "Luma B2B OS",
-    unknown: "Oferta Luma por definir",
-  };
-  return offers[niche];
+  if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) return getProductByKey("estate_starter").name;
+  if (isPhotographyQuoteRow(row)) return getProductByKey("b2b_quote_os").name;
+  if (niche === "unknown") return "Oferta Luma por definir";
+  return getDefaultProductForNiche(niche).name;
 }
 
 function fallbackPain(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
@@ -439,20 +445,11 @@ function fallbackOpportunity(niche: NicheKey, row: Row, web: string, auditDomain
   if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) {
     return "Construir una presencia propia de autoridad, captacion y seguimiento para no depender unicamente de Instagram o WhatsApp.";
   }
-  if (niche === "real_estate") {
-    return "Ordenar la ruta de captacion, filtro y seguimiento para que los interesados lleguen mejor clasificados antes de hablar con el equipo comercial.";
+  if (isPhotographyQuoteRow(row)) {
+    return getProductByKey("b2b_quote_os").opportunity;
   }
-  if (niche === "academy") {
-    return "Organizar inscripcion, cupos, fechas, pagos y seguimiento para reducir friccion en WhatsApp.";
-  }
-  if (niche === "beauty") {
-    return "Convertir consultas de Instagram/WhatsApp en citas mejor filtradas y con seguimiento.";
-  }
-  if (niche === "b2b_services" || niche === "printing_graphics" || niche === "route_products" || niche === "professional_services") {
-    return "Mejorar la ruta de solicitud/cotizacion para que el prospecto entregue informacion util desde el primer contacto.";
-  }
-  if (niche === "developers") {
-    return "Ordenar captacion, filtro y seguimiento de interesados por proyecto antes de que el equipo comercial invierta tiempo.";
+  if (niche !== "unknown") {
+    return getDefaultProductForNiche(niche).opportunity;
   }
   return "";
 }

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { getNicheDefinition } from "@/data/niches";
+import { getDefaultProductForNiche, getProductByKey, type ProductDefinition } from "@/data/products";
 import { Contact, ContactStatus, NicheKey, RecommendedChannel } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -35,8 +35,6 @@ const LOCKED_STATUSES = new Set<ContactStatus>([
 ]);
 
 const SENDABLE_STATUSES = new Set<ContactStatus>(["pending", "listo_contacto", "failed"]);
-const BROKER_NO_WEB_OFFER = "Luma Estate OS Starter";
-const BROKER_NO_WEB_TICKET = "RD$45,000 - RD$75,000";
 const BROKER_NO_WEB_OPPORTUNITY =
   "Construir una presencia propia de autoridad, captacion y seguimiento para no depender unicamente de Instagram o WhatsApp.";
 const BROKER_NO_WEB_PAIN =
@@ -193,12 +191,40 @@ export function inferNicheFromText(value: unknown, context: unknown[] = []): Nic
   if (niche.includes("developer") || niche.includes("construct") || niche.includes("desarroll")) return "developers";
   if (niche.includes("academy") || niche.includes("academ") || niche.includes("curso") || niche.includes("taller")) return "academy";
   if (niche.includes("beauty") || niche.includes("belleza") || niche.includes("spa") || niche.includes("odont")) return "beauty";
-  if (niche.includes("route") || niche.includes("ruta") || niche.includes("catalog") || niche.includes("producto")) return "route_products";
+  if (
+    niche.includes("route") ||
+    niche.includes("ruta") ||
+    niche.includes("distrib") ||
+    niche.includes("despacho") ||
+    niche.includes("reparto") ||
+    niche.includes("chofer") ||
+    niche.includes("cobrador") ||
+    niche.includes("promotor")
+  ) {
+    return "route_products";
+  }
+  if (
+    niche.includes("commerce") ||
+    niche.includes("tienda") ||
+    niche.includes("retail") ||
+    niche.includes("ecommerce") ||
+    niche.includes("e commerce") ||
+    niche.includes("ropa") ||
+    niche.includes("calzado") ||
+    niche.includes("accesorio") ||
+    niche.includes("catalog") ||
+    niche.includes("producto") ||
+    niche.includes("cosmetic") ||
+    niche.includes("capilar")
+  ) {
+    return "commerce";
+  }
   if (niche.includes("printing") || niche.includes("imprent") || niche.includes("graf") || niche.includes("letrero")) return "printing_graphics";
   if (niche.includes("professional") || niche.includes("abogado") || niche.includes("contable") || niche.includes("fotograf") || niche.includes("consult")) {
     return "professional_services";
   }
   if (niche.includes("b2b") || niche.includes("industrial") || niche.includes("seguridad") || niche.includes("limpieza") || niche.includes("logistica")) return "b2b_services";
+  if (niche.includes("content") || niche.includes("contenido") || niche.includes("receta") || niche.includes("blog") || niche.includes("infoproduct")) return "content_monetization";
   return "unknown";
 }
 
@@ -215,6 +241,7 @@ export function resolveLeadNiche(lead: Contact): NicheKey {
     lead.senal_comercial,
     lead.dolor_probable,
     lead.oportunidad_visible,
+    lead.oferta_recomendada,
     lead.variables ? Object.values(lead.variables).join(" ") : "",
   ]);
 }
@@ -335,43 +362,117 @@ export function getSafeRecommendedMessage(lead: Contact) {
 
 export function getChannelMessage(lead: Contact, channel: RecommendedChannel) {
   if (channel === "whatsapp") {
-    return getSafeRecommendedMessage(lead);
+    if (hasCommercialValue(lead.mensaje_whatsapp || lead.suggestedMessage) && !hasUnsafeOutreachLanguage(lead.mensaje_whatsapp || lead.suggestedMessage)) {
+      return getSafeRecommendedMessage(lead);
+    }
+    return getProductBaseMessage(lead, "whatsapp") || getSafeRecommendedMessage(lead);
   }
 
   if (channel === "instagram") {
     return hasCommercialValue(lead.mensaje_instagram) && !hasUnsafeOutreachLanguage(lead.mensaje_instagram)
       ? String(lead.mensaje_instagram)
-      : getInstagramDmFallback(lead);
+      : getProductBaseMessage(lead, "instagram") || getInstagramDmFallback(lead);
   }
 
   if (channel === "email") {
     return hasCommercialValue(lead.mensaje_email) && !hasUnsafeOutreachLanguage(lead.mensaje_email)
       ? String(lead.mensaje_email)
-      : getFallbackConsultativeMessage(lead);
+      : getProductBaseMessage(lead, "email") || getFallbackConsultativeMessage(lead);
   }
 
-  return getFallbackConsultativeMessage(lead);
+  return getProductBaseMessage(lead, channel) || getFallbackConsultativeMessage(lead);
 }
 
 export function getEmailSubject(lead: Contact) {
   return lead.asunto_email || `Observacion breve para ${getLeadBusinessName(lead)}`;
 }
 
+function hasImportedOffer(lead: Contact) {
+  const offer = String(lead.oferta_recomendada ?? "");
+  return hasCommercialValue(offer) ? offer : "";
+}
+
+function isPhotographyQuoteLead(lead: Contact) {
+  const text = normalizeText([
+    lead.nombre_negocio,
+    lead.businessName,
+    lead.empresa_marca,
+    lead.nombre_persona,
+    lead.cargo_rol,
+    lead.nicho,
+    lead.senal_comercial,
+    lead.dolor_probable,
+    lead.oportunidad_visible,
+    lead.notas,
+    lead.notes,
+    lead.variables ? Object.values(lead.variables).join(" ") : "",
+  ].join(" "));
+
+  return (
+    text.includes("fotograf") &&
+    (text.includes("cotiz") ||
+      text.includes("proyecto") ||
+      text.includes("evento") ||
+      text.includes("brief") ||
+      text.includes("paquete") ||
+      text.includes("sesion") ||
+      text.includes("archivo"))
+  );
+}
+
+export function getLeadProduct(lead: Contact): ProductDefinition {
+  const importedOffer = normalizeText(hasImportedOffer(lead));
+  if (importedOffer.includes("starter")) return getProductByKey("estate_starter");
+  if (importedOffer.includes("foundation") || importedOffer.includes("estate")) return getProductByKey("estate_foundation");
+  if (importedOffer.includes("commerce")) return getProductByKey("commerce_os");
+  if (importedOffer.includes("route")) return getProductByKey("route_os");
+  if (importedOffer.includes("quote") || importedOffer.includes("cotiz")) return getProductByKey("b2b_quote_os");
+  if (importedOffer.includes("industrial") || importedOffer === normalizeText("Luma B2B OS")) return getProductByKey("b2b_industrial_os");
+  if (importedOffer.includes("professional")) return getProductByKey("professional_os");
+  if (importedOffer.includes("content") || importedOffer.includes("monetization")) return getProductByKey("content_monetization_os");
+  if (importedOffer.includes("beauty")) return getProductByKey("beauty_os");
+  if (importedOffer.includes("academ")) return getProductByKey("academia_os");
+
+  if (isBrokerAgentWithoutWeb(lead)) return getProductByKey("estate_starter");
+  if (isPhotographyQuoteLead(lead)) return getProductByKey("b2b_quote_os");
+  return getDefaultProductForNiche(resolveLeadNiche(lead));
+}
+
+function getProductBaseMessage(lead: Contact, channel: RecommendedChannel) {
+  const product = getLeadProduct(lead);
+  const template = product.baseMessages[channel] || product.baseMessages.whatsapp || product.baseMessages.email || "";
+  if (!template) return "";
+  return formatMessage(template, {
+    Nombre: getLeadPersonName(lead),
+    Negocio: getLeadBusinessName(lead),
+    Zona: getLeadCity(lead) || "su zona",
+    Demo: product.demo.url,
+    Producto: product.name,
+  });
+}
+
 export function getLeadOffer(lead: Contact) {
   const offer = String(lead.oferta_recomendada ?? "");
+  const normalizedOffer = normalizeText(offer);
+  const legacyNonCatalogOffer =
+    normalizedOffer === normalizeText("Landing Proyecto + CRM + Dashboard") ||
+    normalizedOffer === normalizeText("Luma B2B OS");
   if (
     hasCommercialValue(offer) &&
-    !(isBrokerAgentWithoutWeb(lead) && normalizeText(offer) === normalizeText("Luma Estate OS Foundation"))
+    !legacyNonCatalogOffer &&
+    !(isBrokerAgentWithoutWeb(lead) && normalizedOffer === normalizeText("Luma Estate OS Foundation"))
   ) {
     return offer;
   }
-  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_OFFER;
-  return getNicheDefinition(resolveLeadNiche(lead)).offer;
+  return getLeadProduct(lead).name;
 }
 
 export function getLeadTicket(lead: Contact) {
-  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_TICKET;
-  return getNicheDefinition(resolveLeadNiche(lead)).ticket;
+  return getLeadProduct(lead).ticket;
+}
+
+export function getLeadDemo(lead: Contact) {
+  return getLeadProduct(lead).demo;
 }
 
 export function getLeadPain(lead: Contact) {
@@ -383,6 +484,8 @@ export function getLeadPain(lead: Contact) {
 export function getLeadOpportunity(lead: Contact) {
   if (hasCommercialValue(lead.oportunidad_visible)) return String(lead.oportunidad_visible);
   if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_OPPORTUNITY;
+  const product = getLeadProduct(lead);
+  if (hasCommercialValue(product.opportunity)) return product.opportunity;
   const niche = resolveLeadNiche(lead);
 
   if (niche === "real_estate") {
