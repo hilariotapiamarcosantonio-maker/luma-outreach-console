@@ -1,0 +1,81 @@
+import type { NicheKey } from "@/types";
+
+export interface NicheDefinition {
+  key: NicheKey;
+  label: string;
+  shortLabel: string;
+  offer: string;
+  ticket: string;
+}
+
+export const NICHES: NicheDefinition[] = [
+  {
+    key: "real_estate",
+    label: "Inmobiliarias / brokers / agentes",
+    shortLabel: "Inmobiliarias",
+    offer: "Luma Estate OS Foundation",
+    ticket: "RD$75,000 - US$3,000+",
+  },
+  {
+    key: "developers",
+    label: "Constructoras / desarrolladores / proyectos",
+    shortLabel: "Desarrolladores",
+    offer: "Landing de proyecto + filtro + CRM + dashboard",
+    ticket: "RD$90,000 - US$3,000+",
+  },
+  {
+    key: "academy",
+    label: "Academias / cursos / talleres",
+    shortLabel: "Academias",
+    offer: "Academia OS",
+    ticket: "RD$25,000 - RD$90,000+",
+  },
+  {
+    key: "beauty",
+    label: "Estetica / spas / odontologia / belleza",
+    shortLabel: "Beauty / Spa",
+    offer: "Luma Beauty OS",
+    ticket: "RD$35,000 - RD$90,000+",
+  },
+  {
+    key: "route_products",
+    label: "Rutas / productos / promotores / catalogo",
+    shortLabel: "Rutas / Productos",
+    offer: "Luma Route OS",
+    ticket: "RD$50,000 - RD$150,000+",
+  },
+  {
+    key: "printing_graphics",
+    label: "Imprentas / letreros / servicios graficos B2B",
+    shortLabel: "Imprentas B2B",
+    offer: "Luma B2B Quote OS",
+    ticket: "RD$45,000 - RD$150,000+",
+  },
+  {
+    key: "professional_services",
+    label: "Abogados / contables / fotografos / consultores",
+    shortLabel: "Servicios Profesionales",
+    offer: "Luma Professional OS",
+    ticket: "RD$25,000 - RD$90,000+",
+  },
+  {
+    key: "b2b_services",
+    label: "Seguridad / limpieza / mantenimiento / industrial / logistica",
+    shortLabel: "B2B Industrial",
+    offer: "Luma B2B OS",
+    ticket: "RD$75,000 - RD$150,000+",
+  },
+];
+
+export const UNKNOWN_NICHE: NicheDefinition = {
+  key: "unknown",
+  label: "Nicho por clasificar",
+  shortLabel: "Nicho pendiente",
+  offer: "Oferta Luma por definir",
+  ticket: "Pendiente",
+};
+
+export function getNicheDefinition(value?: string | null) {
+  const normalized = String(value ?? "").trim();
+  return NICHES.find((niche) => niche.key === normalized) ?? UNKNOWN_NICHE;
+}
