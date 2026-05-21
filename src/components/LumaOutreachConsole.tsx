@@ -27,6 +27,7 @@ import {
   MessagesSquare,
   Phone,
   RefreshCw,
+  Save,
   Search,
   Settings2,
   ShieldCheck,
@@ -75,6 +76,7 @@ import type { AppState, Contact, ContactStatus, ImportHistoryItem, ImportMode, I
 
 const STORAGE_KEY = "luma_outreach_console_state_v1";
 const LEGACY_STORAGE_KEY = "luma_outreach_legacy_crm_data";
+const LUMA_HUB_BASE_URL = "https://luma-intelligence-hub.vercel.app";
 
 function getDefaultTemplate(workspace: WorkspaceConfig) {
   return `Hola, [Nombre]. Soy ${workspace.operatorName}, de ${workspace.companyName}. Hice una revision preliminar basada en senales publicas y vi una oportunidad visible en la ruta digital/comercial de [Negocio]. Te puedo enviar una observacion breve?`;
@@ -135,6 +137,16 @@ type QuickFilter =
 type Toast = {
   message: string;
   type: "info" | "success" | "error";
+};
+
+type SheetsSyncState = {
+  connected: boolean;
+  isSyncing: boolean;
+  isSaving: boolean;
+  lastSyncAt?: string;
+  lastSaveAt?: string;
+  error?: string;
+  mode: "google_sheets" | "local_fallback";
 };
 
 interface LumaOutreachConsoleProps {
@@ -463,6 +475,20 @@ function normalizeExternalUrl(value?: string) {
   return `https://${raw.replace(/^\/+/, "")}`;
 }
 
+function getLeadReportUrl(lead: Contact) {
+  if (hasValue(lead.reporte_luma)) return normalizeExternalUrl(String(lead.reporte_luma));
+  if (hasValue(lead.audit_slug)) {
+    return `${LUMA_HUB_BASE_URL.replace(/\/$/, "")}/audit/${encodeURIComponent(String(lead.audit_slug).trim())}`;
+  }
+  return "";
+}
+
+function getLeadSourceLabel(lead: Contact) {
+  if (lead.source_origin === "google_sheets" || lead.sourceFile?.toLowerCase().includes("google sheets")) return "Google Sheets";
+  if (lead.source_origin === "csv" || lead.sourceFile || lead.imported_file_name) return "CSV";
+  return "local";
+}
+
 function getHost(value?: string) {
   const url = normalizeExternalUrl(value);
   if (!url) return "";
@@ -730,10 +756,74 @@ export function LumaOutreachConsole({
   const [prospectsPage, setProspectsPage] = useState(1);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [sheetsSync, setSheetsSync] = useState<SheetsSyncState>({
+    connected: false,
+    isSyncing: false,
+    isSaving: false,
+    mode: "local_fallback",
+  });
+  const [dirtyLeadPatches, setDirtyLeadPatches] = useState<Record<string, Partial<Contact>>>({});
+  const initialSheetsSyncAttempted = useRef(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceStorageKey = useMemo(
     () => `${STORAGE_KEY}_${workspaceConfig.workspaceSlug}`,
     [workspaceConfig.workspaceSlug],
+  );
+
+  const syncFromSheets = useCallback(
+    async (silent = false) => {
+      setSheetsSync((prev) => ({ ...prev, isSyncing: true, error: undefined }));
+      try {
+        const response = await fetch("/api/sheets/leads?tab=prospectos", { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "No pude sincronizar desde Google Sheets.");
+        }
+
+        const nextContacts = ((payload.contacts ?? []) as Contact[]).map(normalizeLoadedContact);
+        const activeNiches = Array.from(new Set(nextContacts.map((lead) => resolveLeadNiche(lead))));
+        const now = new Date().toISOString();
+        setState((prev) => ({
+          ...prev,
+          contacts: nextContacts,
+          sourceFileName: `Google Sheets: ${payload.tab || "Prospectos"}`,
+          campaignName: "Google Sheets",
+          importReport: payload.report,
+          workspace: {
+            ...(prev.workspace ?? {
+              activeLeadCount: nextContacts.length,
+              activeNiches,
+            }),
+            activeLeadCount: nextContacts.length,
+            lastImportedFileName: `Google Sheets: ${payload.tab || "Prospectos"}`,
+            lastImportDate: now,
+            lastImportMode: "replace",
+            activeNiches,
+            datasetStatus: nextContacts.some(isReviewLead) ? "requiere_revision" : "limpio",
+          },
+        }));
+        setDirtyLeadPatches({});
+        setSheetsSync({
+          connected: true,
+          isSyncing: false,
+          isSaving: false,
+          lastSyncAt: now,
+          mode: "google_sheets",
+        });
+        if (!silent) setToast({ message: `${nextContacts.length} prospectos sincronizados desde Google Sheets.`, type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error de sincronizacion con Google Sheets.";
+        setSheetsSync((prev) => ({
+          ...prev,
+          connected: false,
+          isSyncing: false,
+          error: message,
+          mode: "local_fallback",
+        }));
+        if (!silent) setToast({ message, type: "error" });
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -768,6 +858,12 @@ export function LumaOutreachConsole({
       setToast({ message: "No pude leer el estado local. Puedes importar el lote otra vez.", type: "error" });
     }
   }, [workspaceStorageKey]);
+
+  useEffect(() => {
+    if (initialSheetsSyncAttempted.current) return;
+    initialSheetsSyncAttempted.current = true;
+    void syncFromSheets(true);
+  }, [syncFromSheets]);
 
   useEffect(() => {
     const toSave: AppState = {
@@ -1041,30 +1137,145 @@ export function LumaOutreachConsole({
     return { ...parsed, importedOnly, report };
   }, [importMode, pendingImport, state.contacts]);
 
-  const patchLead = useCallback((id: string, patch: Partial<Contact>) => {
+  const patchLead = useCallback((id: string, patch: Partial<Contact>, options: { markDirty?: boolean } = {}) => {
     const now = new Date().toISOString();
+    const nextPatch = {
+      ...patch,
+      fecha_ultima_actualizacion: now,
+    };
     setState((prev) => ({
       ...prev,
       contacts: prev.contacts.map((lead) =>
         lead.id === id
           ? {
               ...lead,
-              ...patch,
+              ...nextPatch,
               estado: (patch.status ?? patch.estado ?? lead.status) as ContactStatus,
-              fecha_ultima_actualizacion: now,
             }
           : lead,
       ),
     }));
+    if (options.markDirty !== false) {
+      setDirtyLeadPatches((prev) => ({
+        ...prev,
+        [id]: {
+          ...(prev[id] ?? {}),
+          ...nextPatch,
+        },
+      }));
+    }
   }, []);
 
+  const saveLeadPatchToSheets = useCallback(
+    async (
+      lead: Contact,
+      patch: Partial<Contact>,
+      options: { incrementContactCount?: boolean; confirmAdvancedState?: boolean } = {},
+    ) => {
+      if (!lead.row_number && !lead.importedRow) {
+        throw new Error("Este prospecto no tiene fila de Google Sheets asociada.");
+      }
+
+      setSheetsSync((prev) => ({ ...prev, isSaving: true, error: undefined }));
+      const response = await fetch("/api/sheets/update-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          row_number: lead.row_number || lead.importedRow,
+          lead_id: lead.id,
+          tab: lead.sheet_tab || "Prospectos",
+          updates: patch,
+          incrementContactCount: Boolean(options.incrementContactCount),
+          confirmAdvancedState: Boolean(options.confirmAdvancedState),
+        }),
+      });
+      const payload = await response.json();
+
+      if (response.status === 409 && payload.requiresConfirmation) {
+        const confirmed = window.confirm("Este prospecto ya tiene un estado avanzado en Sheets. Confirmas actualizarlo?");
+        if (!confirmed) throw new Error("Actualizacion cancelada para proteger el estado avanzado.");
+        return saveLeadPatchToSheets(lead, patch, { ...options, confirmAdvancedState: true });
+      }
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "No pude guardar en Google Sheets.");
+      }
+
+      const now = new Date().toISOString();
+      setDirtyLeadPatches((prev) => {
+        const next = { ...prev };
+        delete next[lead.id];
+        return next;
+      });
+      setSheetsSync((prev) => ({
+        ...prev,
+        connected: true,
+        isSaving: false,
+        lastSaveAt: now,
+        mode: "google_sheets",
+      }));
+      return payload;
+    },
+    [],
+  );
+
+  const saveProposalToSheets = useCallback(async (lead: Contact) => {
+    const demo = getLeadDemo(lead);
+    const response = await fetch("/api/sheets/proposal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_id: lead.id,
+        row_number: lead.row_number || lead.importedRow,
+        nombre_negocio: getLeadBusinessName(lead),
+        nicho: resolveLeadNiche(lead),
+        oferta: getLeadOffer(lead),
+        ticket_rd: getLeadTicket(lead),
+        demo_url: demo.url,
+        canal_envio: getRecommendedChannel(lead),
+        estado_propuesta: lead.status === "proposal_sent" || lead.status === "propuesta_enviada" ? "enviada" : lead.status,
+        monto_estimado_rd: String(lead.monto_estimado ?? ""),
+        link_propuesta: lead.propuesta_link,
+        notas_propuesta: lead.conversation_summary || lead.notas || lead.notes,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || "No pude guardar la propuesta en Sheets.");
+    }
+    return payload;
+  }, []);
+
+  const saveDirtyChangesToSheets = useCallback(async () => {
+    const entries = Object.entries(dirtyLeadPatches);
+    if (entries.length === 0) {
+      setToast({ message: "No hay cambios locales pendientes para guardar.", type: "info" });
+      return;
+    }
+
+    setSheetsSync((prev) => ({ ...prev, isSaving: true, error: undefined }));
+    try {
+      for (const [leadId, patch] of entries) {
+        const lead = contacts.find((item) => item.id === leadId);
+        if (!lead) continue;
+        await saveLeadPatchToSheets(lead, patch);
+      }
+      setToast({ message: `${entries.length} cambio(s) guardado(s) en Google Sheets.`, type: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error guardando cambios en Sheets.";
+      setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+      setToast({ message, type: "error" });
+    }
+  }, [contacts, dirtyLeadPatches, saveLeadPatchToSheets]);
+
   const updateLeadStatus = useCallback(
-    (lead: Contact, status: ContactStatus, channel?: RecommendedChannel) => {
+    async (lead: Contact, status: ContactStatus, channel?: RecommendedChannel) => {
       const now = new Date().toISOString();
       const currentCount = Number(lead.cantidad_contactos ?? lead.sentCount ?? 0);
       const currentAttempts = Number(lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0) || 0;
       const isContact = status === "contacted";
       const countsAsAttempt = OUTBOUND_ATTEMPT_STATUSES.has(status) && lead.status !== status;
+      const countsAsContactCount = countsAsAttempt || isContact;
       const isProposalStatus = PROPOSAL_STATUSES.has(status);
       const defaultFollowupDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString().slice(0, 10);
       const nextStep =
@@ -1082,18 +1293,18 @@ export function LumaOutreachConsole({
                   ? "Seguimiento de propuesta"
                   : lead.proximo_paso || lead.nextStep;
 
-      patchLead(lead.id, {
+      const patch: Partial<Contact> = {
         status,
         estado: status,
         proximo_paso: nextStep,
         nextStep,
         ultimo_canal_usado: channel ?? lead.ultimo_canal_usado ?? getRecommendedChannel(lead),
         last_channel: channel ?? lead.last_channel ?? lead.ultimo_canal_usado ?? getRecommendedChannel(lead),
-        cantidad_contactos: isContact ? currentCount + 1 : currentCount,
-        sentCount: isContact ? currentCount + 1 : currentCount,
+        cantidad_contactos: countsAsContactCount ? currentCount + 1 : currentCount,
+        sentCount: countsAsContactCount ? currentCount + 1 : currentCount,
         attempt_count: countsAsAttempt ? currentAttempts + 1 : currentAttempts,
-        fecha_contacto: isContact ? now : lead.fecha_contacto,
-        lastContactDate: isContact ? now : lead.lastContactDate,
+        fecha_contacto: isContact ? now.slice(0, 10) : lead.fecha_contacto,
+        lastContactDate: isContact ? now.slice(0, 10) : lead.lastContactDate,
         last_interaction_date: status === "sin_accion_por_ahora" ? lead.last_interaction_date : now,
         fecha_propuesta:
           status === "proposal_sent" || status === "propuesta_enviada"
@@ -1109,18 +1320,38 @@ export function LumaOutreachConsole({
             ? lead.fecha_seguimiento || lead.followup_due_date || defaultFollowupDate
             : lead.fecha_seguimiento,
         conversation_summary: lead.conversation_summary || lead.notas || lead.notes,
-      });
-      setToast({ message: `${getLeadBusinessName(lead)} actualizado: ${statusLabel(status)}.`, type: "success" });
+      };
+
+      patchLead(lead.id, patch);
+      setToast({ message: `${getLeadBusinessName(lead)} actualizado: ${statusLabel(status)}. Guardando en Sheets...`, type: "info" });
+
+      try {
+        await saveLeadPatchToSheets(lead, patch, { incrementContactCount: countsAsContactCount });
+        if (isProposalStatus) await saveProposalToSheets({ ...lead, ...patch } as Contact);
+        setToast({ message: `${getLeadBusinessName(lead)} guardado en Google Sheets.`, type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Cambio local guardado; fallo Google Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message, type: "error" });
+      }
     },
-    [patchLead],
+    [patchLead, saveLeadPatchToSheets, saveProposalToSheets],
   );
 
   const saveLeadNotes = useCallback(
-    (lead: Contact, notes: string) => {
-      patchLead(lead.id, { notes, notas: notes });
-      setToast({ message: "Nota local guardada.", type: "success" });
+    async (lead: Contact, notes: string) => {
+      const patch = { notes, notas: notes };
+      patchLead(lead.id, patch);
+      try {
+        await saveLeadPatchToSheets(lead, patch);
+        setToast({ message: "Nota agregada en Google Sheets.", type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Nota local guardada; fallo Google Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message, type: "error" });
+      }
     },
-    [patchLead],
+    [patchLead, saveLeadPatchToSheets],
   );
 
   const copyText = useCallback((text: string, label: string) => {
@@ -1140,7 +1371,7 @@ export function LumaOutreachConsole({
       }
 
       window.open(link, "_blank", "noopener,noreferrer");
-      patchLead(lead.id, { ultimo_canal_usado: "whatsapp", last_channel: "whatsapp" });
+      patchLead(lead.id, { ultimo_canal_usado: "whatsapp", last_channel: "whatsapp" }, { markDirty: false });
       setToast({ message: "WhatsApp Web abierto con mensaje prellenado. Envio manual solamente.", type: "info" });
     },
     [patchLead],
@@ -1155,7 +1386,7 @@ export function LumaOutreachConsole({
       }
 
       window.open(link, "_blank", "noopener,noreferrer");
-      patchLead(lead.id, { ultimo_canal_usado: "instagram", last_channel: "instagram" });
+      patchLead(lead.id, { ultimo_canal_usado: "instagram", last_channel: "instagram" }, { markDirty: false });
       setToast({ message: "Instagram abierto. Copia el mensaje y contacta manualmente.", type: "info" });
     },
     [patchLead],
@@ -1170,7 +1401,7 @@ export function LumaOutreachConsole({
       }
 
       window.open(`tel:${phone}`, "_self");
-      patchLead(lead.id, { ultimo_canal_usado: "llamada", last_channel: "llamada" });
+      patchLead(lead.id, { ultimo_canal_usado: "llamada", last_channel: "llamada" }, { markDirty: false });
       setToast({ message: "Telefono abierto para llamada manual.", type: "info" });
     },
     [patchLead],
@@ -1185,7 +1416,7 @@ export function LumaOutreachConsole({
       }
 
       window.open(link, "_blank", "noopener,noreferrer");
-      patchLead(lead.id, { ultimo_canal_usado: "web", last_channel: "web" });
+      patchLead(lead.id, { ultimo_canal_usado: "web", last_channel: "web" }, { markDirty: false });
       setToast({ message: "Web abierta para revision manual.", type: "info" });
     },
     [patchLead],
@@ -1252,7 +1483,7 @@ export function LumaOutreachConsole({
         importMode === "replace" ||
         normalized.imported_file_name === pendingImport.fileName ||
         normalized.sourceFile === pendingImport.fileName;
-      return belongsToCurrentFile ? { ...normalized, imported_at: normalized.imported_at || now } : normalized;
+      return belongsToCurrentFile ? { ...normalized, imported_at: normalized.imported_at || now, source_origin: "csv" as const } : normalized;
     });
     const activeNiches = Array.from(new Set(nextContacts.map((lead) => resolveLeadNiche(lead))));
     const detectedNiches = importPreview.report.nichesDetected.length ? importPreview.report.nichesDetected : activeNiches;
@@ -1464,6 +1695,98 @@ export function LumaOutreachConsole({
     setActiveView("today");
   }, [contacts, filteredLeads, state.workspace?.lastImportedFileName]);
 
+  const createSheetBatch = useCallback(
+    async (
+      type: "today" | "whatsapp" | "instagram" | "email" | "niche" | "followup_overdue",
+      options: { channel?: RecommendedChannel; niche?: NicheKey | "all" } = {},
+    ) => {
+      if (type === "niche" && (!options.niche || options.niche === "all")) {
+        setToast({ message: "Elige un nicho antes de crear un lote por nicho.", type: "error" });
+        return;
+      }
+
+      setSheetsSync((prev) => ({ ...prev, isSaving: true, error: undefined }));
+      try {
+        const response = await fetch("/api/sheets/create-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            channel: options.channel,
+            niche: options.niche,
+            limit: 50,
+            operador: workspaceConfig.operatorName,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "No pude crear el lote desde Sheets.");
+        }
+
+        const now = new Date().toISOString();
+        const batchLeads = ((payload.leads ?? []) as Contact[]).map((lead, index) =>
+          normalizeLoadedContact({
+            ...lead,
+            active_batch_name: payload.batch_id,
+            active_batch_created_at: now,
+            active_batch_order: index + 1,
+          } as Contact),
+        );
+        const activeBatchLeadIds = batchLeads.map((lead) => lead.id);
+        const batchLeadById = new Map(batchLeads.map((lead) => [lead.id, lead]));
+
+        setState((prev) => {
+          const existingIds = new Set(prev.contacts.map((lead) => lead.id));
+          const updatedExisting = prev.contacts.map((lead) =>
+            batchLeadById.has(lead.id)
+              ? {
+                  ...lead,
+                  active_batch_name: payload.batch_id,
+                  active_batch_created_at: now,
+                  active_batch_order: activeBatchLeadIds.indexOf(lead.id) + 1,
+                }
+              : lead,
+          );
+          const appended = batchLeads.filter((lead) => !existingIds.has(lead.id));
+          const nextContacts = updatedExisting.length ? [...updatedExisting, ...appended] : batchLeads;
+          return {
+            ...prev,
+            contacts: nextContacts,
+            sourceFileName: "Google Sheets",
+            workspace: {
+              ...(prev.workspace ?? {
+                activeLeadCount: nextContacts.length,
+                activeNiches: Array.from(new Set(nextContacts.map((item) => resolveLeadNiche(item)))),
+              }),
+              activeLeadCount: nextContacts.length,
+              activeBatchName: payload.batch_id,
+              activeBatchCreatedAt: now,
+              activeBatchSourceFile: "Google Sheets",
+              activeBatchMainNiche: batchLeads[0] ? resolveLeadNiche(batchLeads[0]) : options.niche || "unknown",
+              activeBatchLeadIds,
+              lastImportedFileName: "Google Sheets",
+              lastImportDate: now,
+            },
+          };
+        });
+        setSheetsSync((prev) => ({
+          ...prev,
+          connected: true,
+          isSaving: false,
+          lastSaveAt: now,
+          mode: "google_sheets",
+        }));
+        setToast({ message: `${payload.total ?? batchLeads.length} prospectos agregados al lote ${payload.batch_id}.`, type: "success" });
+        setActiveView("today");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No pude crear el lote desde Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message, type: "error" });
+      }
+    },
+    [workspaceConfig.operatorName],
+  );
+
   const renderLeadCard = (lead: Contact, compact = false) => {
     const channel = getRecommendedChannel(lead);
     const niche = getNicheDefinition(resolveLeadNiche(lead));
@@ -1480,6 +1803,8 @@ export function LumaOutreachConsole({
     const webTarget = lead.web || lead.audit_domain || "";
     const reviewDomain = needsDomainReview(lead);
     const originalMessageSafeToShow = hasValue(originalWhatsAppMessage) && !hasUnsafeOutreachLanguage(originalWhatsAppMessage);
+    const reportUrl = getLeadReportUrl(lead);
+    const sourceLabel = getLeadSourceLabel(lead);
 
     return (
       <article key={lead.id} className="luma-lead-card">
@@ -1488,6 +1813,8 @@ export function LumaOutreachConsole({
             <div className="flex flex-wrap items-center gap-2">
               <LeadChannelBadge channel={channel} />
               <LeadStatusBadge status={lead.status} />
+              <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {sourceLabel}</Badge>
+              {!hasValue(lead.reporte_luma) && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Reporte pendiente</Badge>}
               {hasValue(lead.prioridad || lead.priority) && (
                 <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">
                   Prioridad {lead.prioridad || lead.priority}
@@ -1539,6 +1866,9 @@ export function LumaOutreachConsole({
             <ActionButton icon={ExternalLink} onClick={() => openWebManual(lead)} disabled={!hasValue(webTarget)}>
               Abrir web
             </ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")} disabled={!hasValue(reportUrl)}>
+              Ver Reporte Luma
+            </ActionButton>
             <ActionButton icon={Clipboard} onClick={() => copyContactData(lead)}>
               Copiar todos los datos
             </ActionButton>
@@ -1555,7 +1885,7 @@ export function LumaOutreachConsole({
             <InfoBlock title="Facebook" value={visibleValue(lead.facebook)} />
             <InfoBlock title="Web" value={visibleValue(lead.web)} />
             <InfoBlock title="audit_domain" value={visibleValue(lead.audit_domain)} />
-            <InfoBlock title="reporte_luma" value={visibleValue(lead.reporte_luma)} />
+            <InfoBlock title="_reporte_luma" value={hasValue(lead.reporte_luma) ? String(lead.reporte_luma) : "Reporte pendiente"} />
             <InfoBlock title="ciudad_zona" value={visibleValue(lead.ciudad_zona || lead.city)} />
             <InfoBlock title="fuente_dato" value={visibleValue(lead.fuente_dato)} />
             <InfoBlock title="fuente_auditoria" value={visibleValue(lead.fuente_auditoria)} />
@@ -1626,6 +1956,7 @@ export function LumaOutreachConsole({
     const channel = getRecommendedChannel(lead);
     const message = getChannelMessage(lead, channel);
     const whatsappNumber = getLeadWhatsAppNumber(lead);
+    const reportUrl = getLeadReportUrl(lead);
     return (
       <article key={lead.id} className="luma-lead-card p-4">
         <div className="grid gap-3 xl:grid-cols-[1.2fr_0.75fr_0.7fr_1.4fr_auto] xl:items-center">
@@ -1643,12 +1974,15 @@ export function LumaOutreachConsole({
             {isInstagramOnlyLead(lead) && (
               <Badge className="border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
             )}
+            <Badge className="border-white/10 bg-white/[0.04] text-white/60">{getLeadSourceLabel(lead)}</Badge>
+            {!hasValue(lead.reporte_luma) && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Reporte pendiente</Badge>}
           </div>
           <LeadChannelBadge channel={channel} />
           <p className="line-clamp-2 text-xs leading-relaxed text-[var(--luma-muted)]">{message}</p>
           <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
             <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje safe")}>Copiar</ActionButton>
             <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(whatsappNumber)}>WhatsApp</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")} disabled={!hasValue(reportUrl)}>Reporte</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "contacted", channel)}>Contactado</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Respondio</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "follow_up", channel)}>Seguimiento</ActionButton>
@@ -1870,11 +2204,23 @@ export function LumaOutreachConsole({
           />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <ActionButton icon={Flame} variant="gold" onClick={createTodayBatchFromFilters}>
-            Crear lote de hoy desde filtros actuales
+          <ActionButton icon={Flame} variant="gold" onClick={() => createSheetBatch("today")}>
+            Crear lote de hoy desde Sheets
           </ActionButton>
-          <ActionButton icon={MessagesSquare} variant="gold" onClick={createInstagramDmBatch}>
+          <ActionButton icon={MessageCircle} variant="gold" onClick={() => createSheetBatch("whatsapp", { channel: "whatsapp" })}>
+            Crear lote WhatsApp
+          </ActionButton>
+          <ActionButton icon={MessagesSquare} variant="gold" onClick={() => createSheetBatch("instagram", { channel: "instagram" })}>
             Crear lote Instagram DM
+          </ActionButton>
+          <ActionButton icon={Mail} variant="gold" onClick={() => createSheetBatch("email", { channel: "email" })}>
+            Crear lote Email
+          </ActionButton>
+          <ActionButton icon={BriefcaseBusiness} onClick={() => createSheetBatch("niche", { niche: nicheFilter })}>
+            Crear lote por nicho
+          </ActionButton>
+          <ActionButton icon={CalendarClock} onClick={() => createSheetBatch("followup_overdue")}>
+            Crear lote seguimiento vencido
           </ActionButton>
           <SegmentButton active={todayFilter === "pending"} onClick={() => setTodayFilter(todayFilter === "pending" ? "all" : "pending")} icon={Filter}>
             Ver solo pendientes
@@ -1977,7 +2323,7 @@ export function LumaOutreachConsole({
                 Segmenta canales manuales y arma lotes sin enviar mensajes automaticamente.
               </p>
             </div>
-            <ActionButton icon={MessagesSquare} variant="gold" onClick={createInstagramDmBatch}>
+            <ActionButton icon={MessagesSquare} variant="gold" onClick={() => createSheetBatch("instagram", { channel: "instagram" })}>
               Crear lote Instagram DM
             </ActionButton>
           </div>
@@ -2552,9 +2898,9 @@ export function LumaOutreachConsole({
   const renderSettings = () => (
     <section className="space-y-5">
       <SectionHeader
-        kicker="Control local"
+        kicker="Control Sheets"
         title="Configuracion"
-        body="Estado local, exportacion de seguimiento y preparacion de la proxima fase sin conectar Google Sheets todavia."
+        body="Google Sheets es fuente de verdad. CSV y localStorage quedan como respaldo operativo."
       />
       <div className="grid gap-5 xl:grid-cols-2">
         <WorkspaceSummary
@@ -2579,7 +2925,7 @@ export function LumaOutreachConsole({
       </div>
 
       <div className="luma-panel p-6">
-        <p className="luma-kicker">Proxima fase: Google Sheets por nicho</p>
+        <p className="luma-kicker">Columnas operativas Sheets</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {GOOGLE_SHEETS_COLUMNS.map((column) => (
             <Badge key={column} className="border-white/10 bg-white/[0.04] text-white/60">{column}</Badge>
@@ -2764,6 +3110,43 @@ export function LumaOutreachConsole({
 
           <div className="mt-4 rounded-lg border border-[#C7A45A]/20 bg-[#C7A45A]/[0.08] p-4 text-sm text-[#F5D78C]">
             Esta consola asiste el contacto manual. No env&iacute;a mensajes autom&aacute;ticamente ni usa APIs de WhatsApp.
+          </div>
+
+          <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className={
+                    sheetsSync.connected
+                      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                      : "border-amber-300/20 bg-amber-300/10 text-amber-100"
+                  }
+                >
+                  {sheetsSync.connected ? "Conectado a Sheets" : "Modo local fallback"}
+                </Badge>
+                {sheetsSync.lastSyncAt && (
+                  <Badge className="border-white/10 bg-white/[0.04] text-white/60">
+                    Ultima sincronizacion: {formatLocalDateTime(sheetsSync.lastSyncAt)}
+                  </Badge>
+                )}
+                {sheetsSync.isSaving && <Badge className="border-sky-300/20 bg-sky-300/10 text-sky-100">Guardando</Badge>}
+                {sheetsSync.error && <Badge className="border-red-300/20 bg-red-300/10 text-red-100">Error de sincronizacion</Badge>}
+                {Object.keys(dirtyLeadPatches).length > 0 && (
+                  <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">
+                    {Object.keys(dirtyLeadPatches).length} cambio(s) pendientes
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton icon={RefreshCw} onClick={() => syncFromSheets()} disabled={sheetsSync.isSyncing}>
+                  {sheetsSync.isSyncing ? "Sincronizando" : "Sincronizar desde Google Sheets"}
+                </ActionButton>
+                <ActionButton icon={Save} variant="gold" onClick={saveDirtyChangesToSheets} disabled={sheetsSync.isSaving}>
+                  Guardar cambios en Sheets
+                </ActionButton>
+              </div>
+            </div>
+            {sheetsSync.error && <p className="mt-3 text-xs text-red-100/80">{sheetsSync.error}</p>}
           </div>
 
           <AnimatePresence mode="wait">

@@ -140,6 +140,9 @@ export interface Contact {
   active_batch_name?: string;
   active_batch_created_at?: string;
   active_batch_order?: number;
+  row_number?: number;
+  sheet_tab?: string;
+  source_origin?: "google_sheets" | "csv" | "local";
 }
 
 export interface SendConfig {
