@@ -22,6 +22,7 @@ export type ImportMode = "replace" | "append";
 
 export type ContactStatus =
   | "pending"
+  | "listo_contacto"
   | "sin_accion_por_ahora"
   | "contacted"
   | "replied"

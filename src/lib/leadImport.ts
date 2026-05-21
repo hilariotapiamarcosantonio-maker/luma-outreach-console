@@ -177,7 +177,7 @@ const FIELD_ALIASES: Record<CanonicalField, string[]> = {
   whatsapp: ["whatsapp", "wa", "numero whatsapp", "numero de whatsapp"],
   telefono: ["telefono", "telefono", "celular", "movil", "phone", "mobile"],
   correo: ["correo", "email", "mail"],
-  instagram: ["instagram", "ig"],
+  instagram: ["instagram", "perfil instagram", "ig", "usuario ig", "username", "handle"],
   facebook: ["facebook", "fb"],
   linkedin: ["linkedin"],
   ciudad_zona: ["ciudad_zona", "ciudad / zona", "ciudad", "zona", "ubicacion", "ubicacion", "city", "area"],
@@ -353,7 +353,8 @@ function detectHeaderRow(rows: Row[]) {
 
 function mapStatus(value: unknown): ContactStatus {
   const status = normalizeText(value);
-  if (!status || status.includes("pend") || status.includes("nuevo") || status.includes("listo_contacto") || status.includes("listo contacto")) return "pending";
+  if (status.includes("listo_contacto") || status.includes("listo contacto")) return "listo_contacto";
+  if (!status || status.includes("pend") || status.includes("nuevo")) return "pending";
   if (status.includes("sin accion") || status.includes("sin_accion") || status.includes("pausado por ahora")) return "sin_accion_por_ahora";
   if (status.includes("needs_review") || status.includes("revision") || status.includes("review")) return "needs_review";
   if (status.includes("sin canal")) return "sin_canal";
@@ -397,7 +398,22 @@ function normalizeChannel(value: unknown): RecommendedChannel | undefined {
   return undefined;
 }
 
-function fallbackOffer(niche: NicheKey) {
+function isBrokerAgentWithoutWebRow(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
+  if (niche !== "real_estate") return false;
+  if (hasValue(web || auditDomain)) return false;
+  const text = normalizeText(row.join(" "));
+  return (
+    hasValue(instagram) ||
+    text.includes("broker") ||
+    text.includes("agente") ||
+    text.includes("asesor") ||
+    text.includes("real estate") ||
+    text.includes("inmobili")
+  );
+}
+
+function fallbackOffer(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
+  if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) return "Luma Estate OS Starter";
   const offers: Record<NicheKey, string> = {
     real_estate: "Luma Estate OS Foundation",
     developers: "Landing Proyecto + CRM + Dashboard",
@@ -412,7 +428,17 @@ function fallbackOffer(niche: NicheKey) {
   return offers[niche];
 }
 
-function fallbackOpportunity(niche: NicheKey) {
+function fallbackPain(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
+  if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) {
+    return "Dependencia de redes sociales y conversaciones dispersas sin una ruta clara de captacion y seguimiento.";
+  }
+  return "";
+}
+
+function fallbackOpportunity(niche: NicheKey, row: Row, web: string, auditDomain: string, instagram: string) {
+  if (isBrokerAgentWithoutWebRow(niche, row, web, auditDomain, instagram)) {
+    return "Construir una presencia propia de autoridad, captacion y seguimiento para no depender unicamente de Instagram o WhatsApp.";
+  }
   if (niche === "real_estate") {
     return "Ordenar la ruta de captacion, filtro y seguimiento para que los interesados lleguen mejor clasificados antes de hablar con el equipo comercial.";
   }
@@ -623,6 +649,7 @@ export function parseRowsToContacts(
     const name = nombre_persona || businessName || correo || instagram || `Lead ${headerIndex + offset + 2}`;
     const niche = normalizeNiche(value(row, columns, "nicho"), [...row, fileName]);
     const importedStatus = mapStatus(value(row, columns, "estado"));
+    const instagramMessage = value(row, columns, "mensaje_instagram");
     const lookupContact = {
       id: value(row, columns, "id"),
       phone: whatsapp || telefono,
@@ -639,6 +666,16 @@ export function parseRowsToContacts(
     if (existing && isLockedStatus(existing.status)) {
       status = existing.status;
       preservedStatuses += 1;
+    }
+
+    if (
+      status === "pending" &&
+      hasValue(instagram) &&
+      !isValidWhatsAppPhone(whatsapp) &&
+      !isValidWhatsAppPhone(telefono) &&
+      hasValue(instagramMessage)
+    ) {
+      status = "listo_contacto";
     }
 
     if (
@@ -702,12 +739,12 @@ export function parseRowsToContacts(
       fuente_dato: value(row, columns, "fuente_dato"),
       fuente_auditoria: value(row, columns, "fuente_auditoria"),
       senal_comercial: value(row, columns, "senal_comercial") || fallbackSignal(niche, row),
-      dolor_probable: value(row, columns, "dolor_probable"),
-      oportunidad_visible: value(row, columns, "oportunidad_visible") || fallbackOpportunity(niche),
-      oferta_recomendada: value(row, columns, "oferta_recomendada") || fallbackOffer(niche),
+      dolor_probable: value(row, columns, "dolor_probable") || fallbackPain(niche, row, web, auditDomain, instagram),
+      oportunidad_visible: value(row, columns, "oportunidad_visible") || fallbackOpportunity(niche, row, web, auditDomain, instagram),
+      oferta_recomendada: value(row, columns, "oferta_recomendada") || fallbackOffer(niche, row, web, auditDomain, instagram),
       angulo_contacto: value(row, columns, "angulo_contacto"),
       mensaje_whatsapp: value(row, columns, "mensaje_whatsapp"),
-      mensaje_instagram: value(row, columns, "mensaje_instagram"),
+      mensaje_instagram: instagramMessage,
       asunto_email: value(row, columns, "asunto_email"),
       mensaje_email: value(row, columns, "mensaje_email"),
       estado: status,
@@ -762,10 +799,10 @@ export function parseRowsToContacts(
     contact.mensaje_recomendado_safe = safeMessageForContact(contact);
     contact.oferta_recomendada = hasCommercialValue(contact.oferta_recomendada)
       ? contact.oferta_recomendada
-      : fallbackOffer(niche);
+      : fallbackOffer(niche, row, web, auditDomain, instagram);
     contact.oportunidad_visible = hasCommercialValue(contact.oportunidad_visible)
       ? contact.oportunidad_visible
-      : fallbackOpportunity(niche);
+      : fallbackOpportunity(niche, row, web, auditDomain, instagram);
     contact.senal_comercial = hasCommercialValue(contact.senal_comercial)
       ? contact.senal_comercial
       : fallbackSignal(niche, row);

@@ -22,6 +22,7 @@ import {
   Inbox,
   LayoutDashboard,
   Mail,
+  Menu,
   MessageCircle,
   MessagesSquare,
   Phone,
@@ -33,12 +34,13 @@ import {
   Target,
   UserCheck,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { DEFAULT_WORKSPACE, getWorkspaceConfig, type WorkspaceConfig } from "@/config/workspaces";
-import { NICHES, UNKNOWN_NICHE, getNicheDefinition } from "@/data/niches";
+import { IMPLEMENTATION_OFFERS, NICHES, UNKNOWN_NICHE, getNicheDefinition } from "@/data/niches";
 import { inferCampaignName, parseRowsToContacts, UNIFIED_LEAD_FIELDS } from "@/lib/leadImport";
 import {
   cleanPhone,
@@ -50,16 +52,20 @@ import {
   getLeadBusinessName,
   getLeadCity,
   getLeadOffer,
+  getLeadPain,
   getLeadOpportunity,
   getLeadPhoneNumber,
   getLeadPersonName,
   getLeadSignal,
+  getLeadTicket,
   getLeadWhatsAppNumber,
   getReportDisplay,
   getRecommendedChannel,
   getSafeRecommendedMessage,
   hasValue,
   hasUnsafeOutreachLanguage,
+  isBrokerAgentWithoutWeb,
+  isInstagramOnlyLead,
   resolveLeadNiche,
   statusLabel,
 } from "@/lib/utils";
@@ -113,6 +119,16 @@ type DateFilter =
   | "seguimiento_semana"
   | "importados_recientemente"
   | "sin_fecha_seguimiento";
+
+type QuickFilter =
+  | "all"
+  | "whatsapp_ready"
+  | "instagram_ready"
+  | "email_ready"
+  | "instagram_only"
+  | "sin_canal"
+  | "sin_web"
+  | "brokers_sin_web";
 
 type Toast = {
   message: string;
@@ -178,6 +194,7 @@ const REVIEW_STATUSES = new Set<ContactStatus>([
   "buscar_canal",
 ]);
 const CONTACTABLE_STATUSES = new Set<ContactStatus>(["pending", "failed"]);
+CONTACTABLE_STATUSES.add("listo_contacto");
 const PROSPECTS_PAGE_SIZE = 100;
 
 const DATE_FILTER_LABELS: Record<DateFilter, string> = {
@@ -189,6 +206,27 @@ const DATE_FILTER_LABELS: Record<DateFilter, string> = {
   importados_recientemente: "Importados recientemente",
   sin_fecha_seguimiento: "Sin fecha de seguimiento",
 };
+
+const QUICK_FILTER_LABELS: Record<QuickFilter, string> = {
+  all: "Sin filtro rapido",
+  whatsapp_ready: "WhatsApp-ready",
+  instagram_ready: "Instagram-ready",
+  email_ready: "Email-ready",
+  instagram_only: "Instagram-only",
+  sin_canal: "Sin canal",
+  sin_web: "Sin web",
+  brokers_sin_web: "Brokers sin web",
+};
+
+const QUICK_FILTERS: Array<{ key: QuickFilter; label: string }> = [
+  { key: "whatsapp_ready", label: "WhatsApp-ready" },
+  { key: "instagram_ready", label: "Instagram-ready" },
+  { key: "email_ready", label: "Email-ready" },
+  { key: "instagram_only", label: "Instagram-only" },
+  { key: "sin_canal", label: "Sin canal" },
+  { key: "sin_web", label: "Sin web" },
+  { key: "brokers_sin_web", label: "Brokers sin web" },
+];
 
 const CHANNEL_LABELS: Record<RecommendedChannel, string> = {
   whatsapp: "WhatsApp",
@@ -214,6 +252,7 @@ const CHANNEL_STYLES: Record<RecommendedChannel, string> = {
 
 const STATUS_STYLES: Partial<Record<ContactStatus, string>> = {
   pending: "border-white/10 bg-white/[0.04] text-white/[0.55]",
+  listo_contacto: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100",
   sin_accion_por_ahora: "border-white/10 bg-white/[0.04] text-white/[0.45]",
   contacted: "border-sky-300/20 bg-sky-300/10 text-sky-100",
   replied: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100",
@@ -297,13 +336,16 @@ function createEmptyState(workspace: WorkspaceConfig = DEFAULT_WORKSPACE): AppSt
 }
 
 function normalizeLoadedContact(contact: Contact): Contact {
-  const status = contact.status === "sending" ? "pending" : contact.status || "pending";
+  let status = contact.status === "sending" ? "pending" : contact.status || "pending";
   const phone = cleanPhone(contact.phone || contact.whatsapp || contact.telefono);
   const whatsapp = cleanPhone(contact.whatsapp || (!hasValue(contact.telefono) ? contact.phone : ""));
   const telefono = cleanPhone(contact.telefono || (!hasValue(whatsapp) ? contact.phone : ""));
   const resolvedNiche = resolveLeadNiche({ ...contact, status } as Contact);
   const attempts = Number(contact.attempt_count ?? contact.cantidad_contactos ?? contact.sentCount ?? 0) || 0;
   const channelSeed = { ...contact, status, nicho: resolvedNiche, phone, whatsapp, telefono } as Contact;
+  if (status === "pending" && isInstagramOnlyLead(channelSeed) && hasValue(contact.mensaje_instagram)) {
+    status = "listo_contacto";
+  }
   const lastChannel = contact.last_channel || contact.ultimo_canal_usado || getRecommendedChannel(channelSeed);
 
   return {
@@ -325,6 +367,7 @@ function normalizeLoadedContact(contact: Contact): Contact {
     conversation_summary: contact.conversation_summary || contact.notas || contact.notes || contact.tipo_respuesta,
     variables: contact.variables ?? {},
     oferta_recomendada: getLeadOffer(contact),
+    dolor_probable: contact.dolor_probable || getLeadPain(contact),
     oportunidad_visible: getLeadOpportunity(contact),
     senal_comercial: getLeadSignal(contact),
     mensaje_recomendado_safe: contact.mensaje_recomendado_safe || getSafeRecommendedMessage(contact),
@@ -446,13 +489,7 @@ function needsDomainReview(lead: Contact) {
 }
 
 function hasOnlyInstagram(lead: Contact) {
-  return (
-    hasValue(lead.instagram) &&
-    !hasValue(getLeadWhatsAppNumber(lead)) &&
-    !hasValue(lead.correo || lead.email) &&
-    !hasValue(lead.linkedin) &&
-    !hasValue(getLeadPhoneNumber(lead))
-  );
+  return isInstagramOnlyLead(lead);
 }
 
 type ReviewReason = {
@@ -465,17 +502,32 @@ type ReviewReason = {
 function getReviewReasons(lead: Contact): ReviewReason[] {
   const reasons: ReviewReason[] = [];
   const channel = getRecommendedChannel(lead);
-  const messageMissing = !hasValue(lead.mensaje_whatsapp || lead.mensaje_instagram || lead.mensaje_email || lead.suggestedMessage);
+  const messageMissing =
+    channel === "instagram"
+      ? !hasValue(lead.mensaje_instagram)
+      : channel === "email"
+        ? !hasValue(lead.mensaje_email)
+        : channel === "whatsapp"
+          ? !hasValue(lead.mensaje_whatsapp || lead.suggestedMessage)
+          : !hasValue(lead.mensaje_whatsapp || lead.mensaje_instagram || lead.mensaje_email || lead.suggestedMessage);
   const businessMissing = !hasValue(lead.nombre_negocio || lead.businessName || lead.name);
+  const instagramWithoutWeb = hasValue(lead.instagram) && !hasValue(lead.web || lead.audit_domain);
 
   if (channel === "sin_canal") {
     reasons.push({ key: "sin_canal", label: "Sin canal visible", detail: "No hay WhatsApp, Instagram, email, LinkedIn, telefono o web usable.", tone: "danger" });
   }
   if (hasOnlyInstagram(lead)) {
-    reasons.push({ key: "solo_instagram", label: "Solo Instagram", detail: "Contacto disponible por Instagram. Requiere enfoque DM.", tone: "success" });
+    reasons.push({ key: "solo_instagram", label: "Solo Instagram", detail: "Prospecto valido. Puede contactarse por DM para ofrecer infraestructura digital.", tone: "success" });
   }
-  if (!hasValue(lead.web)) {
-    reasons.push({ key: "sin_web", label: "Sin web", detail: "No hay sitio visible; no bloquea contacto si otro canal existe.", tone: "neutral" });
+  if (!hasValue(lead.web || lead.audit_domain)) {
+    reasons.push({
+      key: "sin_web",
+      label: instagramWithoutWeb ? "Sin web, contacto por Instagram" : "Sin web",
+      detail: instagramWithoutWeb
+        ? "Contacto disponible por Instagram. Requiere enfoque DM."
+        : "No hay sitio visible; no bloquea contacto si otro canal existe.",
+      tone: instagramWithoutWeb ? "success" : "neutral",
+    });
   }
   if (needsDomainReview(lead)) {
     reasons.push({ key: "dominio_no_validado", label: "Dominio no validado", detail: "Web o audit_domain parece invalido o no coincide. Revisar dominio.", tone: "warning" });
@@ -666,6 +718,7 @@ export function LumaOutreachConsole({
   const [channelFilter, setChannelFilter] = useState<RecommendedChannel | "all">("all");
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "all">("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [reviewOnly, setReviewOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"priority" | "status" | "date">("priority");
   const [importMode, setImportMode] = useState<ImportMode>("replace");
@@ -673,6 +726,7 @@ export function LumaOutreachConsole({
   const [todayFilter, setTodayFilter] = useState<"all" | "pending" | "contacted" | "interested">("all");
   const [todayCompact, setTodayCompact] = useState(false);
   const [prospectsPage, setProspectsPage] = useState(1);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceStorageKey = useMemo(
@@ -735,8 +789,26 @@ export function LumaOutreachConsole({
   }, [toast]);
 
   useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
     setProspectsPage(1);
-  }, [channelFilter, dateFilter, nicheFilter, priorityFilter, reviewOnly, search, sortMode, statusFilter]);
+  }, [channelFilter, dateFilter, nicheFilter, priorityFilter, quickFilter, reviewOnly, search, sortMode, statusFilter]);
 
   const contacts = state.contacts;
   const routeContextLabel = routeLeadId
@@ -808,6 +880,7 @@ export function LumaOutreachConsole({
         calls: nicheLeads.filter((lead) => CALL_STATUSES.has(lead.status)).length,
         proposals: nicheLeads.filter((lead) => PROPOSAL_STATUSES.has(lead.status)).length,
         closed: nicheLeads.filter((lead) => lead.status === "closed").length,
+        brokersWithoutWeb: nicheLeads.filter(isBrokerAgentWithoutWeb).length,
         conversion: contacted > 0 ? Math.round((responded / contacted) * 100) : 0,
       };
     });
@@ -872,6 +945,13 @@ export function LumaOutreachConsole({
         if (nicheFilter !== "all" && resolveLeadNiche(lead) !== nicheFilter) return false;
         if (priorityFilter !== "all" && (lead.prioridad || lead.priority || "sin prioridad") !== priorityFilter) return false;
         if (channelFilter !== "all" && getRecommendedChannel(lead) !== channelFilter) return false;
+        if (quickFilter === "whatsapp_ready" && getRecommendedChannel(lead) !== "whatsapp") return false;
+        if (quickFilter === "instagram_ready" && getRecommendedChannel(lead) !== "instagram") return false;
+        if (quickFilter === "email_ready" && getRecommendedChannel(lead) !== "email") return false;
+        if (quickFilter === "instagram_only" && !isInstagramOnlyLead(lead)) return false;
+        if (quickFilter === "sin_canal" && getRecommendedChannel(lead) !== "sin_canal") return false;
+        if (quickFilter === "sin_web" && hasValue(lead.web || lead.audit_domain)) return false;
+        if (quickFilter === "brokers_sin_web" && !isBrokerAgentWithoutWeb(lead)) return false;
         if (statusFilter !== "all" && lead.status !== statusFilter) return false;
         const followupDate = lead.followup_due_date || lead.fecha_seguimiento;
         if (dateFilter === "contactados_hoy" && !isToday(lead.fecha_contacto || lead.lastContactDate)) return false;
@@ -890,7 +970,7 @@ export function LumaOutreachConsole({
         const dateB = new Date(b.fecha_ultima_actualizacion || b.fecha_contacto || b.lastContactDate || 0).getTime();
         return dateB - dateA;
       });
-  }, [channelFilter, contacts, dateFilter, getLeadImportDate, nicheFilter, priorityFilter, reviewOnly, search, sortMode, statusFilter]);
+  }, [channelFilter, contacts, dateFilter, getLeadImportDate, nicheFilter, priorityFilter, quickFilter, reviewOnly, search, sortMode, statusFilter]);
 
   const uniquePriorities = useMemo(() => {
     const values = new Set<string>();
@@ -916,20 +996,27 @@ export function LumaOutreachConsole({
     if (nicheFilter !== "all") labels.push(`Nicho: ${getNicheDefinition(nicheFilter).shortLabel}`);
     if (priorityFilter !== "all") labels.push(`Prioridad: ${priorityFilter}`);
     if (channelFilter !== "all") labels.push(`Canal: ${CHANNEL_LABELS[channelFilter]}`);
+    if (quickFilter !== "all") labels.push(`Filtro rapido: ${QUICK_FILTER_LABELS[quickFilter]}`);
     if (statusFilter !== "all") labels.push(`Estado: ${statusLabel(statusFilter)}`);
     if (dateFilter !== "all") labels.push(`Fecha: ${DATE_FILTER_LABELS[dateFilter]}`);
     if (reviewOnly) labels.push("Solo revision");
     return labels;
-  }, [channelFilter, dateFilter, nicheFilter, priorityFilter, reviewOnly, search, statusFilter]);
+  }, [channelFilter, dateFilter, nicheFilter, priorityFilter, quickFilter, reviewOnly, search, statusFilter]);
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setNicheFilter("all");
     setPriorityFilter("all");
     setChannelFilter("all");
+    setQuickFilter("all");
     setStatusFilter("all");
     setDateFilter("all");
     setReviewOnly(false);
+  }, []);
+
+  const handleMobileNavSelect = useCallback((view: ViewKey) => {
+    setActiveView(view);
+    setMobileMenuOpen(false);
   }, []);
 
   const importPreview = useMemo(() => {
@@ -1327,6 +1414,54 @@ export function LumaOutreachConsole({
     setActiveView("today");
   }, [contacts, filteredLeads, state.workspace?.lastImportedFileName]);
 
+  const createInstagramDmBatch = useCallback(() => {
+    const excludedStatuses = new Set<ContactStatus>(["not_interested", "discarded", "closed"]);
+    const candidates = (filteredLeads.length ? filteredLeads : contacts)
+      .filter((lead) => hasValue(lead.instagram) && !excludedStatuses.has(lead.status))
+      .sort((a, b) => priorityRank(a.prioridad || a.priority) - priorityRank(b.prioridad || b.priority))
+      .slice(0, 50);
+
+    if (candidates.length === 0) {
+      setToast({ message: "No hay prospectos con Instagram visible para armar lote DM.", type: "error" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const dateLabel = new Date().toLocaleDateString();
+    const mainNiche = resolveLeadNiche(candidates[0]);
+    const batchName = `Lote Instagram DM - ${getNicheDefinition(mainNiche).shortLabel} - ${dateLabel}`;
+    const candidateIds = new Set(candidates.map((lead) => lead.id));
+    const activeBatchLeadIds = candidates.map((lead) => lead.id);
+    const sourceFile = candidates[0].imported_file_name || candidates[0].sourceFile || state.workspace?.lastImportedFileName;
+
+    setState((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((lead) =>
+        candidateIds.has(lead.id)
+          ? {
+              ...lead,
+              active_batch_name: batchName,
+              active_batch_created_at: now,
+              active_batch_order: activeBatchLeadIds.indexOf(lead.id) + 1,
+            }
+          : lead,
+      ),
+      workspace: {
+        ...(prev.workspace ?? {
+          activeLeadCount: prev.contacts.length,
+          activeNiches: Array.from(new Set(prev.contacts.map((item) => resolveLeadNiche(item)))),
+        }),
+        activeBatchName: batchName,
+        activeBatchCreatedAt: now,
+        activeBatchSourceFile: sourceFile,
+        activeBatchMainNiche: mainNiche,
+        activeBatchLeadIds,
+      },
+    }));
+    setToast({ message: `${candidates.length} prospectos quedaron en lote Instagram DM. No se envio nada automaticamente.`, type: "success" });
+    setActiveView("today");
+  }, [contacts, filteredLeads, state.workspace?.lastImportedFileName]);
+
   const renderLeadCard = (lead: Contact, compact = false) => {
     const channel = getRecommendedChannel(lead);
     const niche = getNicheDefinition(resolveLeadNiche(lead));
@@ -1356,12 +1491,23 @@ export function LumaOutreachConsole({
                 </Badge>
               )}
               {reviewDomain && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Revisar dominio</Badge>}
+              {isInstagramOnlyLead(lead) && (
+                <Badge className="border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
+              )}
+              {isBrokerAgentWithoutWeb(lead) && (
+                <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">Broker sin web</Badge>
+              )}
             </div>
             <h3 className="mt-4 text-xl font-semibold tracking-tight text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
             <p className="mt-1 text-sm text-[var(--luma-muted)]">
               {getLeadPersonName(lead)} {lead.cargo_rol ? `- ${lead.cargo_rol}` : ""} - {niche.shortLabel}
               {getLeadCity(lead) ? ` - ${getLeadCity(lead)}` : ""}
             </p>
+            {isInstagramOnlyLead(lead) && (
+              <p className="mt-3 rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-2 text-sm text-fuchsia-100">
+                Contacto disponible por Instagram. Requiere enfoque DM.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -1416,7 +1562,7 @@ export function LumaOutreachConsole({
         {!compact && (
           <div className="mt-5 grid gap-3 lg:grid-cols-5">
             <InfoBlock title="Senal comercial" value={getLeadSignal(lead)} />
-            <InfoBlock title="Dolor probable" value={lead.dolor_probable || lead.painPoint || "Sin dolor cargado."} />
+            <InfoBlock title="Dolor probable" value={getLeadPain(lead)} />
             <InfoBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} />
             <InfoBlock title="Oferta / angulo" value={`${getLeadOffer(lead)}\n${lead.angulo_contacto || lead.contactAngle || "Angulo pendiente."}`} />
             <InfoBlock title="Reporte Luma" value={getReportDisplay(lead)} />
@@ -1474,7 +1620,7 @@ export function LumaOutreachConsole({
 
   const renderCompactLead = (lead: Contact) => {
     const channel = getRecommendedChannel(lead);
-    const message = getSafeRecommendedMessage(lead);
+    const message = getChannelMessage(lead, channel);
     const whatsappNumber = getLeadWhatsAppNumber(lead);
     return (
       <article key={lead.id} className="luma-lead-card p-4">
@@ -1489,6 +1635,9 @@ export function LumaOutreachConsole({
             </Badge>
             {hasValue(lead.prioridad || lead.priority) && (
               <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{lead.prioridad || lead.priority}</Badge>
+            )}
+            {isInstagramOnlyLead(lead) && (
+              <Badge className="border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
             )}
           </div>
           <LeadChannelBadge channel={channel} />
@@ -1611,6 +1760,60 @@ export function LumaOutreachConsole({
               </div>
             </div>
 
+            {niche.key === "real_estate" && (
+              <div className="mt-5 rounded-lg border border-[#C7A45A]/20 bg-[#C7A45A]/[0.06] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="luma-kicker">Subsegmento comercial</p>
+                    <h4 className="mt-2 text-lg font-semibold text-[var(--luma-ivory)]">Brokers / agentes sin web</h4>
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--luma-muted)]">
+                      Prospectos para vender infraestructura digital propia, no propiedades.
+                    </p>
+                  </div>
+                  <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">
+                    {niche.brokersWithoutWeb} detectados
+                  </Badge>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <InfoBlock title="Oferta recomendada" value="Luma Estate OS Starter" />
+                  <InfoBlock title="Ticket sugerido" value="RD$45,000 - RD$75,000" />
+                  <InfoBlock
+                    title="Incluye"
+                    value={[
+                      "landing personal o landing de autoridad",
+                      "formulario/filtro de interesados",
+                      "WhatsApp organizado",
+                      "base de prospectos",
+                      "seguimiento simple",
+                      "presentacion profesional",
+                      "posibilidad de escalar a CRM/dashboard",
+                    ].join("\n")}
+                  />
+                  <InfoBlock
+                    title="Oportunidad visible"
+                    value="Construir una presencia propia de autoridad, captacion y seguimiento para no depender unicamente de Instagram o WhatsApp."
+                  />
+                  <InfoBlock
+                    title="Dolor probable"
+                    value="Dependencia de redes sociales y conversaciones dispersas sin una ruta clara de captacion y seguimiento."
+                  />
+                  <div className="flex items-end">
+                    <ActionButton
+                      icon={Filter}
+                      variant="gold"
+                      onClick={() => {
+                        setNicheFilter("real_estate");
+                        setQuickFilter("brokers_sin_web");
+                        setActiveView("prospects");
+                      }}
+                    >
+                      Ver brokers sin web
+                    </ActionButton>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {niche.total === 0 ? (
               <div className="mt-5 rounded-lg border border-dashed border-white/10 p-5 text-sm text-[var(--luma-muted)]">
                 Sin leads cargados todavia. Importa un CSV normalizado para activar este nicho.
@@ -1662,6 +1865,9 @@ export function LumaOutreachConsole({
         <div className="mt-4 flex flex-wrap gap-2">
           <ActionButton icon={Flame} variant="gold" onClick={createTodayBatchFromFilters}>
             Crear lote de hoy desde filtros actuales
+          </ActionButton>
+          <ActionButton icon={MessagesSquare} variant="gold" onClick={createInstagramDmBatch}>
+            Crear lote Instagram DM
           </ActionButton>
           <SegmentButton active={todayFilter === "pending"} onClick={() => setTodayFilter(todayFilter === "pending" ? "all" : "pending")} icon={Filter}>
             Ver solo pendientes
@@ -1756,6 +1962,28 @@ export function LumaOutreachConsole({
           ))}
         </div>
 
+        <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="luma-kicker">Filtros rapidos de lote</p>
+              <p className="mt-2 text-sm text-[var(--luma-muted)]">
+                Segmenta canales manuales y arma lotes sin enviar mensajes automaticamente.
+              </p>
+            </div>
+            <ActionButton icon={MessagesSquare} variant="gold" onClick={createInstagramDmBatch}>
+              Crear lote Instagram DM
+            </ActionButton>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <FilterChip active={quickFilter === "all"} onClick={() => setQuickFilter("all")}>Todos</FilterChip>
+            {QUICK_FILTERS.map((filter) => (
+              <FilterChip key={filter.key} active={quickFilter === filter.key} onClick={() => setQuickFilter(filter.key)}>
+                {filter.label}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-3 flex flex-wrap gap-2">
           <FilterChip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>Todo estado</FilterChip>
           {uniqueStatuses.map((status) => (
@@ -1799,7 +2027,7 @@ export function LumaOutreachConsole({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]">
-        <div className="grid grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] gap-4 border-b border-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.35]">
+        <div className="hidden grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] gap-4 border-b border-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.35] md:grid">
           <span>Prospecto</span>
           <span>Nicho</span>
           <span>Canal</span>
@@ -1812,16 +2040,31 @@ export function LumaOutreachConsole({
           visibleProspectRows.map((lead) => (
             <div
               key={lead.id}
-              className="grid grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] gap-4 border-b border-white/[0.06] px-4 py-4 text-sm last:border-b-0"
+              className="grid gap-3 border-b border-white/[0.06] px-4 py-4 text-sm last:border-b-0 md:grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] md:gap-4"
             >
               <div className="min-w-0">
                 <p className="truncate font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</p>
                 <p className="mt-1 truncate text-xs text-[var(--luma-muted)]">{getLeadPersonName(lead)}</p>
+                {isInstagramOnlyLead(lead) && (
+                  <Badge className="mt-2 border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
+                )}
               </div>
-              <span className="text-[var(--luma-muted)]">{getNicheDefinition(resolveLeadNiche(lead)).shortLabel}</span>
-              <LeadChannelBadge channel={getRecommendedChannel(lead)} />
-              <LeadStatusBadge status={lead.status} />
-              <span className="line-clamp-2 text-[var(--luma-muted)]">{lead.proximo_paso || lead.nextStep || "Sin proximo paso."}</span>
+              <div>
+                <p className="luma-kicker md:hidden">Nicho</p>
+                <span className="text-[var(--luma-muted)]">{getNicheDefinition(resolveLeadNiche(lead)).shortLabel}</span>
+              </div>
+              <div>
+                <p className="luma-kicker mb-2 md:hidden">Canal</p>
+                <LeadChannelBadge channel={getRecommendedChannel(lead)} />
+              </div>
+              <div>
+                <p className="luma-kicker mb-2 md:hidden">Estado</p>
+                <LeadStatusBadge status={lead.status} />
+              </div>
+              <div>
+                <p className="luma-kicker md:hidden">Proximo paso</p>
+                <span className="line-clamp-2 text-[var(--luma-muted)]">{lead.proximo_paso || lead.nextStep || "Sin proximo paso."}</span>
+              </div>
             </div>
           ))
         )}
@@ -1950,7 +2193,7 @@ export function LumaOutreachConsole({
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <InfoBlock title="Dolor probable" value={lead.dolor_probable || lead.painPoint || "Sin dolor cargado."} />
+                  <InfoBlock title="Dolor probable" value={getLeadPain(lead)} />
                   <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
                   <InfoBlock title="Angulo de conversacion" value={lead.angulo_contacto || lead.contactAngle || "Conectar senal publica con impacto comercial."} />
                 </div>
@@ -1969,19 +2212,19 @@ export function LumaOutreachConsole({
         <SectionHeader
           kicker="High-ticket"
           title="Propuestas"
-          body="Rangos de oferta por nicho y seguimiento de oportunidades en negociacion, cierre o perdida."
+          body="Propuestas de implementacion Luma Premium: oferta, ticket, siguiente paso y material comercial. No es una seccion para presentar propiedades."
         />
         <div className="grid gap-4 xl:grid-cols-4">
-          {NICHES.map((niche) => (
-            <div key={niche.key} className="luma-panel p-4">
-              <p className="text-sm font-semibold text-[var(--luma-ivory)]">{niche.offer}</p>
-              <p className="mt-2 text-sm text-[var(--luma-muted)]">{niche.shortLabel}</p>
-              <Badge className="mt-3 border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{niche.ticket}</Badge>
+          {IMPLEMENTATION_OFFERS.map((offer) => (
+            <div key={offer.offer} className="luma-panel p-4">
+              <p className="text-sm font-semibold text-[var(--luma-ivory)]">{offer.offer}</p>
+              <p className="mt-2 text-sm text-[var(--luma-muted)]">{offer.nicheLabel}</p>
+              <Badge className="mt-3 border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{offer.ticket}</Badge>
             </div>
           ))}
         </div>
         <div className="rounded-lg border border-dashed border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4 text-sm text-[#F5D78C]">
-          Materiales de propuesta / proyectos vinculados: proxima fase.
+          Links de propuesta, material comercial o demo se guardan por prospecto en localStorage.
         </div>
         {leads.length === 0 ? (
           <EmptyState icon={FileSpreadsheet} title="No hay propuestas activas." body="Cuando una llamada avance, marca propuesta enviada y deja el proximo paso." />
@@ -1989,18 +2232,18 @@ export function LumaOutreachConsole({
           <div className="space-y-4">
             {leads.map((lead) => {
               const niche = getNicheDefinition(resolveLeadNiche(lead));
+              const ticket = getLeadTicket(lead);
               const summary = [
                 `Prospecto: ${getLeadBusinessName(lead)}`,
                 `Nicho: ${niche.shortLabel}`,
                 `Oferta recomendada: ${getLeadOffer(lead)}`,
-                `Ticket sugerido: ${niche.ticket}`,
-                `Monto estimado: ${visibleValue(lead.monto_estimado)}`,
+                `Ticket sugerido: ${ticket}`,
                 `Estado: ${statusLabel(lead.status)}`,
-                `Decision: ${visibleValue(lead.decision_status)}`,
                 `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
                 `Nota comercial: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
                 `Link propuesta: ${visibleValue(lead.propuesta_link)}`,
-                `Link material/proyecto: ${visibleValue(lead.material_link)}`,
+                `Link material o demo: ${visibleValue(lead.material_link)}`,
+                `Monto estimado: ${visibleValue(lead.monto_estimado)}`,
               ].join("\n");
 
               return (
@@ -2009,7 +2252,7 @@ export function LumaOutreachConsole({
                     <div>
                       <div className="flex flex-wrap gap-2">
                         <LeadStatusBadge status={lead.status} />
-                        <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{niche.ticket}</Badge>
+                        <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{ticket}</Badge>
                       </div>
                       <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
                       <p className="mt-1 text-sm text-[var(--luma-muted)]">{getLeadPersonName(lead)} - {niche.shortLabel}</p>
@@ -2017,7 +2260,7 @@ export function LumaOutreachConsole({
                     <div className="flex flex-wrap gap-2">
                       <ActionButton icon={Copy} onClick={() => copyText(summary, "Resumen de propuesta")}>Copiar resumen de propuesta</ActionButton>
                       <ActionButton onClick={() => saveProposalLink(lead, "propuesta_link", "link de propuesta")}>Guardar link de propuesta</ActionButton>
-                      <ActionButton onClick={() => saveProposalLink(lead, "material_link", "link de material/proyecto")}>Guardar link de material/proyecto</ActionButton>
+                      <ActionButton onClick={() => saveProposalLink(lead, "material_link", "link de material o demo")}>Guardar link de material/demo</ActionButton>
                       <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", getRecommendedChannel(lead))}>Marcar enviada</ActionButton>
                       <ActionButton onClick={() => updateLeadStatus(lead, "negotiating", getRecommendedChannel(lead))}>Marcar negociando</ActionButton>
                       <ActionButton onClick={() => updateLeadStatus(lead, "closed", getRecommendedChannel(lead))}>Marcar cerrado</ActionButton>
@@ -2029,16 +2272,15 @@ export function LumaOutreachConsole({
                     <InfoBlock title="Prospecto" value={getLeadBusinessName(lead)} />
                     <InfoBlock title="Nicho" value={niche.shortLabel} />
                     <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
-                    <InfoBlock title="Ticket sugerido" value={niche.ticket} />
-                    <InfoBlock title="Monto estimado" value={visibleValue(lead.monto_estimado)} />
+                    <InfoBlock title="Ticket sugerido" value={ticket} />
                     <InfoBlock title="Estado de propuesta" value={statusLabel(lead.status)} />
-                    <InfoBlock title="Decision status" value={visibleValue(lead.decision_status)} />
-                    <InfoBlock title="Fecha propuesta" value={formatDate(lead.fecha_propuesta)} />
                     <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
                     <InfoBlock title="Nota comercial" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
                     <InfoBlock title="Link propuesta" value={visibleValue(lead.propuesta_link)} />
-                    <InfoBlock title="Link material/proyecto" value={visibleValue(lead.material_link)} />
-                    <InfoBlock title="Materiales de propuesta / proyectos vinculados" value="Proxima fase." />
+                    <InfoBlock title="Link material o demo" value={visibleValue(lead.material_link)} />
+                    <InfoBlock title="Monto estimado" value={visibleValue(lead.monto_estimado)} />
+                    <InfoBlock title="Fecha propuesta" value={formatDate(lead.fecha_propuesta)} />
+                    <InfoBlock title="Decision status" value={visibleValue(lead.decision_status)} />
                   </div>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -2073,9 +2315,9 @@ export function LumaOutreachConsole({
   const renderReview = () => {
     const leads = contacts.filter(isReviewLead);
     const grouped = [
-      { key: "sin_canal", title: "Sin canal visible" },
       { key: "solo_instagram", title: "Solo Instagram" },
       { key: "sin_web", title: "Sin web" },
+      { key: "sin_canal", title: "Sin canal visible" },
       { key: "dominio_no_validado", title: "Dominio no validado" },
       { key: "nicho_pendiente", title: "Nicho pendiente" },
       { key: "mensaje_faltante", title: "Mensaje faltante" },
@@ -2117,6 +2359,12 @@ export function LumaOutreachConsole({
                             <div className="flex flex-wrap gap-2">
                               <LeadStatusBadge status={lead.status} />
                               <LeadChannelBadge channel={getRecommendedChannel(lead)} />
+                              {isInstagramOnlyLead(lead) && (
+                                <Badge className="border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
+                              )}
+                              {isBrokerAgentWithoutWeb(lead) && (
+                                <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">Broker sin web</Badge>
+                              )}
                               {needsDomainReview(lead) && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Revisar dominio</Badge>}
                             </div>
                             <h4 className="mt-4 text-lg font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h4>
@@ -2355,7 +2603,94 @@ export function LumaOutreachConsole({
 
   return (
     <main className="min-h-screen bg-[var(--luma-void)] text-[var(--luma-ivory)]">
-      <div className="mx-auto flex w-full max-w-[1720px] gap-6 px-4 py-5 lg:px-6">
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[var(--luma-void)]/95 px-4 py-3 backdrop-blur-xl xl:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            aria-label="Abrir menu"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen(true)}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]"
+          >
+            <Menu size={19} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-[var(--luma-ivory)]">{workspaceConfig.brandName}</p>
+            <p className="truncate text-xs text-[var(--luma-muted)]">{NAV_ITEMS.find((item) => item.key === activeView)?.label || "Command Center"}</p>
+          </div>
+          <Badge className="shrink-0 border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{metrics.ready} listos</Badge>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Cerrar menu"
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm xl:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <motion.aside
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navegacion movil"
+              className="fixed left-0 top-0 z-[60] flex h-dvh w-[min(22rem,calc(100vw-2rem))] flex-col border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 shadow-2xl xl:hidden"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              <div className="rounded-lg border border-[#C7A45A]/[0.18] bg-[#C7A45A]/[0.08] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-[#C7A45A]/30 bg-black/20 text-[#F5D78C]">
+                      <Sparkles size={19} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--luma-ivory)]">{workspaceConfig.brandName}</p>
+                      <p className="truncate text-xs text-[var(--luma-muted)]">by {workspaceConfig.companyName}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Cerrar menu"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+              </div>
+
+              <nav className="mt-5 flex flex-1 flex-col gap-1 overflow-y-auto pr-1">
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleMobileNavSelect(item.key)}
+                    className={cn("luma-nav-item", activeView === item.key && "luma-nav-item-active")}
+                  >
+                    <item.icon size={17} />
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="mt-5 rounded-lg border border-white/[0.08] bg-black/[0.14] p-4">
+                <p className="luma-kicker">Daily target</p>
+                <p className="mt-2 text-2xl font-semibold">{workspaceConfig.defaultDailyContactGoal}</p>
+                <p className="mt-1 text-xs text-[var(--luma-muted)]">contactos manuales, sin spam.</p>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="mx-auto flex w-full max-w-[1720px] gap-6 px-4 py-4 lg:px-6 xl:py-5">
         <aside className="sticky top-5 hidden h-[calc(100vh-40px)] w-72 shrink-0 flex-col rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/[0.92] p-4 xl:flex">
           <div className="rounded-lg border border-[#C7A45A]/[0.18] bg-[#C7A45A]/[0.08] p-4">
             <div className="flex items-center gap-3">
@@ -2414,20 +2749,6 @@ export function LumaOutreachConsole({
 
           <div className="mt-4 rounded-lg border border-[#C7A45A]/20 bg-[#C7A45A]/[0.08] p-4 text-sm text-[#F5D78C]">
             Esta consola asiste el contacto manual. No env&iacute;a mensajes autom&aacute;ticamente ni usa APIs de WhatsApp.
-          </div>
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 xl:hidden">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setActiveView(item.key)}
-                className={cn("luma-mobile-tab", activeView === item.key && "luma-mobile-tab-active")}
-              >
-                <item.icon size={15} />
-                {item.label}
-              </button>
-            ))}
           </div>
 
           <AnimatePresence mode="wait">

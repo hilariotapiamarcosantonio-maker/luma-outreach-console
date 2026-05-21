@@ -96,6 +96,7 @@ textarea:focus-visible {
     padding: 1.25rem;
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
     animation: luma-card-in 180ms ease both;
+    overflow-wrap: anywhere;
   }
 
   .luma-lead-card:hover {
@@ -122,6 +123,14 @@ textarea:focus-visible {
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--luma-faint);
+  }
+
+  .luma-panel,
+  .luma-empty,
+  .luma-input,
+  .luma-upload,
+  .luma-nav-item {
+    overflow-wrap: anywhere;
   }
 
   .luma-input {
@@ -287,6 +296,23 @@ textarea:focus-visible {
     color: var(--luma-ivory);
     padding: 0.75rem 0.9rem;
     outline: none;
+  }
+
+  @media (max-width: 640px) {
+    .luma-panel,
+    .luma-lead-card {
+      padding: 1rem;
+    }
+
+    .luma-empty {
+      min-height: 160px;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+
+    .luma-kicker {
+      letter-spacing: 0.12em;
+    }
   }
 }
 

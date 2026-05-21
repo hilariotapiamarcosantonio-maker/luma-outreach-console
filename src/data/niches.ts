@@ -8,6 +8,12 @@ export interface NicheDefinition {
   ticket: string;
 }
 
+export interface ImplementationOffer {
+  offer: string;
+  ticket: string;
+  nicheLabel: string;
+}
+
 export const NICHES: NicheDefinition[] = [
   {
     key: "real_estate",
@@ -64,6 +70,49 @@ export const NICHES: NicheDefinition[] = [
     shortLabel: "B2B Industrial",
     offer: "Luma B2B OS",
     ticket: "RD$75,000 - RD$150,000+",
+  },
+];
+
+export const IMPLEMENTATION_OFFERS: ImplementationOffer[] = [
+  {
+    offer: "Luma Estate OS Starter",
+    ticket: "RD$45,000 - RD$75,000",
+    nicheLabel: "Brokers / agentes sin web",
+  },
+  {
+    offer: "Luma Estate OS Foundation",
+    ticket: "RD$75,000 - US$3,000+",
+    nicheLabel: "Inmobiliarias / brokers / agentes",
+  },
+  {
+    offer: "Academia OS",
+    ticket: "RD$25,000 - RD$90,000+",
+    nicheLabel: "Academias / cursos / talleres",
+  },
+  {
+    offer: "Luma Beauty OS",
+    ticket: "RD$35,000 - RD$90,000+",
+    nicheLabel: "Estetica / spas / odontologia / belleza",
+  },
+  {
+    offer: "Luma Route OS",
+    ticket: "RD$50,000 - RD$150,000+",
+    nicheLabel: "Rutas / productos / promotores / catalogo",
+  },
+  {
+    offer: "Luma B2B Quote OS",
+    ticket: "RD$45,000 - RD$150,000+",
+    nicheLabel: "Imprentas / letreros / servicios graficos B2B",
+  },
+  {
+    offer: "Luma Professional OS",
+    ticket: "RD$25,000 - RD$90,000+",
+    nicheLabel: "Servicios profesionales",
+  },
+  {
+    offer: "Luma B2B OS",
+    ticket: "RD$75,000 - RD$150,000+",
+    nicheLabel: "Servicios B2B / industrial",
   },
 ];
 

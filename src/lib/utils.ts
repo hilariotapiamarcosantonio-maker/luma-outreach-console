@@ -34,7 +34,13 @@ const LOCKED_STATUSES = new Set<ContactStatus>([
   "referred",
 ]);
 
-const SENDABLE_STATUSES = new Set<ContactStatus>(["pending", "failed"]);
+const SENDABLE_STATUSES = new Set<ContactStatus>(["pending", "listo_contacto", "failed"]);
+const BROKER_NO_WEB_OFFER = "Luma Estate OS Starter";
+const BROKER_NO_WEB_TICKET = "RD$45,000 - RD$75,000";
+const BROKER_NO_WEB_OPPORTUNITY =
+  "Construir una presencia propia de autoridad, captacion y seguimiento para no depender unicamente de Instagram o WhatsApp.";
+const BROKER_NO_WEB_PAIN =
+  "Dependencia de redes sociales y conversaciones dispersas sin una ruta clara de captacion y seguimiento.";
 const BLANK_COMMERCIAL_VALUES = new Set([
   "",
   "-",
@@ -232,6 +238,44 @@ export function getLeadCity(lead: Contact) {
   return lead.ciudad_zona || lead.city || "";
 }
 
+export function isInstagramOnlyLead(lead: Contact) {
+  return (
+    hasValue(lead.instagram) &&
+    !hasValue(getLeadWhatsAppNumber(lead)) &&
+    !hasValue(lead.correo || lead.email) &&
+    !hasValue(lead.linkedin) &&
+    !hasValue(getLeadPhoneNumber(lead)) &&
+    !hasValue(lead.web || lead.audit_domain)
+  );
+}
+
+export function isBrokerAgentWithoutWeb(lead: Contact) {
+  if (resolveLeadNiche(lead) !== "real_estate") return false;
+  if (hasValue(lead.web || lead.audit_domain)) return false;
+
+  const text = normalizeText([
+    lead.nombre_negocio,
+    lead.businessName,
+    lead.empresa_marca,
+    lead.nombre_persona,
+    lead.cargo_rol,
+    lead.nicho,
+    lead.fuente_dato,
+    lead.notas,
+    lead.notes,
+    lead.instagram,
+  ].join(" "));
+
+  return (
+    hasValue(lead.instagram) ||
+    text.includes("broker") ||
+    text.includes("agente") ||
+    text.includes("asesor") ||
+    text.includes("real estate") ||
+    text.includes("inmobili")
+  );
+}
+
 export function getRecommendedChannel(lead: Contact): RecommendedChannel {
   if (isValidWhatsAppPhone(getLeadWhatsAppNumber(lead))) return "whatsapp";
   if (hasValue(lead.instagram)) return "instagram";
@@ -249,6 +293,14 @@ export function getFallbackConsultativeMessage(lead: Contact) {
   const namePart = person && person !== "Contacto por confirmar" ? person : business;
 
   return `Hola, ${namePart}. Soy Marcos Hilario, de Luma Premium.\n\nHice una revision preliminar basada en senales publicas de ${business} y vi una oportunidad visible en la ruta comercial digital: captacion, filtro y seguimiento de interesados.\n\nNo es una critica ni una auditoria interna. Es una observacion breve desde afuera.\n\nTe la puedo compartir?`;
+}
+
+export function getInstagramDmFallback(lead: Contact) {
+  const business = getLeadBusinessName(lead);
+  const person = getLeadPersonName(lead);
+  const namePart = person && person !== "Contacto por confirmar" ? person : business;
+
+  return `Hola, ${namePart}. Soy Marcos Hilario, de Luma Premium.\n\nVi tu presencia en Instagram y note una oportunidad visible para convertir mejor la atencion que ya generas en una ruta mas clara de captacion y seguimiento.\n\nNo es una critica ni una auditoria interna; es una observacion breve basada en senales publicas.\n\nTe la puedo compartir?`;
 }
 
 export function startsWithColdPlusvalMessage(value?: string) {
@@ -289,7 +341,7 @@ export function getChannelMessage(lead: Contact, channel: RecommendedChannel) {
   if (channel === "instagram") {
     return hasCommercialValue(lead.mensaje_instagram) && !hasUnsafeOutreachLanguage(lead.mensaje_instagram)
       ? String(lead.mensaje_instagram)
-      : getFallbackConsultativeMessage(lead);
+      : getInstagramDmFallback(lead);
   }
 
   if (channel === "email") {
@@ -306,12 +358,31 @@ export function getEmailSubject(lead: Contact) {
 }
 
 export function getLeadOffer(lead: Contact) {
-  if (hasCommercialValue(lead.oferta_recomendada)) return String(lead.oferta_recomendada);
+  const offer = String(lead.oferta_recomendada ?? "");
+  if (
+    hasCommercialValue(offer) &&
+    !(isBrokerAgentWithoutWeb(lead) && normalizeText(offer) === normalizeText("Luma Estate OS Foundation"))
+  ) {
+    return offer;
+  }
+  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_OFFER;
   return getNicheDefinition(resolveLeadNiche(lead)).offer;
+}
+
+export function getLeadTicket(lead: Contact) {
+  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_TICKET;
+  return getNicheDefinition(resolveLeadNiche(lead)).ticket;
+}
+
+export function getLeadPain(lead: Contact) {
+  if (hasCommercialValue(lead.dolor_probable || lead.painPoint)) return String(lead.dolor_probable || lead.painPoint);
+  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_PAIN;
+  return "Dolor pendiente de lectura comercial.";
 }
 
 export function getLeadOpportunity(lead: Contact) {
   if (hasCommercialValue(lead.oportunidad_visible)) return String(lead.oportunidad_visible);
+  if (isBrokerAgentWithoutWeb(lead)) return BROKER_NO_WEB_OPPORTUNITY;
   const niche = resolveLeadNiche(lead);
 
   if (niche === "real_estate") {
@@ -355,6 +426,7 @@ export function getReportDisplay(lead: Contact) {
 export function statusLabel(status: ContactStatus) {
   const labels: Record<ContactStatus, string> = {
     pending: "Pendiente",
+    listo_contacto: "Listo contacto",
     sin_accion_por_ahora: "Sin accion por ahora",
     contacted: "Contactado",
     replied: "Respondió",
