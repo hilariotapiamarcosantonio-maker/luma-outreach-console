@@ -27,7 +27,9 @@ type BatchSummary = {
   excluidos_falta_canal: number;
   excluidos_contacto_reciente: number;
   excluidos_lote_activo: number;
+  sin_mensaje: number;
   incluidos_lote: number;
+  motivo_principal: string;
 };
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
@@ -608,6 +610,35 @@ function hasRequestedBatchChannel(lead: Contact, type: string, channel?: Recomme
   return getRecommendedChannel(lead) !== "sin_canal";
 }
 
+function hasBatchMessageForChannel(lead: Contact, type: string, channel?: RecommendedChannel) {
+  const target = channel || (["whatsapp", "instagram", "email"].includes(type) ? (type as RecommendedChannel) : getRecommendedChannel(lead));
+  if (target === "instagram") return hasValue(lead.mensaje_instagram);
+  if (target === "email") return hasValue(lead.mensaje_email || lead.asunto_email);
+  if (target === "whatsapp") return hasValue(lead.mensaje_whatsapp || lead.suggestedMessage || lead.mensaje_recomendado_safe);
+  return hasValue(lead.mensaje_whatsapp || lead.mensaje_instagram || lead.mensaje_email || lead.suggestedMessage || lead.mensaje_recomendado_safe);
+}
+
+function getBatchMainReason(summary: BatchSummary) {
+  const exclusions = [
+    { value: summary.excluidos_estado_bloqueante, label: "estado bloqueante" },
+    { value: summary.excluidos_falta_canal, label: "falta de canal visible" },
+    { value: summary.excluidos_contacto_reciente, label: "contacto reciente" },
+    { value: summary.excluidos_lote_activo, label: "ya estaba en lote activo" },
+    { value: summary.sin_mensaje, label: "sin mensaje importado; se usara fallback consultivo" },
+  ].filter((item) => item.value > 0);
+  const main = exclusions.sort((a, b) => b.value - a.value)[0];
+
+  if (summary.incluidos_lote > 0) {
+    return `Se crearon ${summary.incluidos_lote} leads porque solo ${summary.incluidos_lote} cumplen canal visible + estado elegible + no contactado recientemente.${
+      main ? ` Motivo principal de exclusion: ${main.label}.` : ""
+    }`;
+  }
+
+  return main
+    ? `No se crearon leads. Motivo principal: ${main.label}.`
+    : "No se crearon leads porque ningun prospecto cumplio los criterios del lote.";
+}
+
 function getBatchLeadKey(lead: Contact) {
   return String(lead.id || lead.row_number || "");
 }
@@ -635,7 +666,9 @@ function buildBatchSummary(
     excluidos_falta_canal: 0,
     excluidos_contacto_reciente: 0,
     excluidos_lote_activo: 0,
+    sin_mensaje: 0,
     incluidos_lote: included.length,
+    motivo_principal: "",
   };
 
   contacts.forEach((lead) => {
@@ -643,6 +676,7 @@ function buildBatchSummary(
     summary.total_evaluados += 1;
     if (hasValue(getLeadWhatsAppNumber(lead))) summary.con_whatsapp += 1;
     if (hasValue(lead.instagram)) summary.con_instagram += 1;
+    if (!hasBatchMessageForChannel(lead, type, channel)) summary.sin_mensaje += 1;
 
     if (includedIds.has(getBatchLeadKey(lead))) return;
     if (isAlreadyInActiveBatch(lead, activeIds)) {
@@ -668,6 +702,7 @@ function buildBatchSummary(
     }
   });
 
+  summary.motivo_principal = getBatchMainReason(summary);
   return summary;
 }
 

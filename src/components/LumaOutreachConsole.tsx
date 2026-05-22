@@ -157,7 +157,9 @@ type BatchCreationSummary = {
   excluidos_falta_canal: number;
   excluidos_contacto_reciente: number;
   excluidos_lote_activo?: number;
+  sin_mensaje?: number;
   incluidos_lote: number;
+  motivo_principal?: string;
 };
 
 interface LumaOutreachConsoleProps {
@@ -799,6 +801,542 @@ function ActionButton({
   );
 }
 
+function TextPreviewBlock({
+  title,
+  value,
+  onCopy,
+  actionLabel = "Ver mas",
+}: {
+  title: string;
+  value: string;
+  onCopy: () => void;
+  actionLabel?: string;
+}) {
+  const cleanValue = hasValue(value) ? String(value).trim() : "Sin dato registrado.";
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="luma-kicker">{title}</p>
+        <button type="button" onClick={onCopy} className="text-white/[0.45] transition hover:text-[var(--luma-gold)]">
+          <Copy size={14} />
+        </button>
+      </div>
+      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
+      <details className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+        <summary className="cursor-pointer text-xs font-semibold text-[#F5D78C]">{actionLabel}</summary>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
+        <button type="button" onClick={onCopy} className="mt-3 text-xs font-semibold text-[#F5D78C]">
+          Copiar completo
+        </button>
+      </details>
+    </div>
+  );
+}
+
+function buildProposalSummary(lead: Contact) {
+  const niche = getNicheDefinition(resolveLeadNiche(lead));
+  const demo = getLeadDemo(lead);
+  const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+  return [
+    `Prospecto: ${getLeadBusinessName(lead)}`,
+    `Persona: ${getLeadPersonName(lead)}`,
+    `Nicho: ${niche.shortLabel}`,
+    `Oferta Luma: ${getLeadOffer(lead)}`,
+    `Ticket sugerido: ${getLeadTicket(lead)}`,
+    `Demo asociada: ${demo.label} - ${demo.url}`,
+    `Canal usado: ${CHANNEL_LABELS[channel] || channel}`,
+    `Fecha: ${formatDate(lead.fecha_propuesta)}`,
+    `Estado actual: ${statusLabel(lead.status)}`,
+    `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
+    `Link propuesta: ${visibleValue(lead.propuesta_link)}`,
+    `Notas: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
+  ].join("\n");
+}
+
+function LeadOperationalCard({
+  lead,
+  selected,
+  expanded,
+  variant = "default",
+  saving,
+  onToggleSelection,
+  onToggleMore,
+  onDetails,
+  onCopyMessage,
+  onCopyEmail,
+  onOpenWhatsApp,
+  onOpenInstagram,
+  onOpenWeb,
+  onOpenDemo,
+  onSave,
+  onPrepareProposal,
+  onUpdateStatus,
+  onAssignChannel,
+  onCopyContactData,
+  onCopyProposalSummary,
+  onSaveProposalLink,
+  onSaveMaterialLink,
+  onNotesBlur,
+}: {
+  lead: Contact;
+  selected: boolean;
+  expanded: boolean;
+  variant?: "default" | "proposal";
+  saving?: boolean;
+  onToggleSelection: () => void;
+  onToggleMore: () => void;
+  onDetails: () => void;
+  onCopyMessage: () => void;
+  onCopyEmail: () => void;
+  onOpenWhatsApp: () => void;
+  onOpenInstagram: () => void;
+  onOpenWeb: () => void;
+  onOpenDemo: () => void;
+  onSave: () => void;
+  onPrepareProposal: () => void;
+  onUpdateStatus: (status: ContactStatus, channel?: RecommendedChannel) => void;
+  onAssignChannel: (channel: RecommendedChannel) => void;
+  onCopyContactData: () => void;
+  onCopyProposalSummary: () => void;
+  onSaveProposalLink: () => void;
+  onSaveMaterialLink: () => void;
+  onNotesBlur: (value: string) => void;
+}) {
+  const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+  const niche = getNicheDefinition(resolveLeadNiche(lead));
+  const demo = getLeadDemo(lead);
+  const message = getChannelMessage(lead, channel);
+  const whatsappNumber = getLeadWhatsAppNumber(lead);
+  const emailAddress = lead.correo || lead.email || "";
+  const webTarget = lead.web || lead.audit_domain || "";
+  const reportUrl = getLeadReportUrl(lead);
+  const notes = lead.conversation_summary || lead.notas || lead.notes || "";
+  const signal = getLeadSignal(lead);
+  const opportunity = getLeadOpportunity(lead);
+  const pain = getLeadPain(lead);
+  const nextStep = lead.proximo_paso || lead.nextStep || "Definir siguiente movimiento.";
+  const proposalSummary = buildProposalSummary(lead);
+
+  return (
+    <article className="luma-lead-card">
+      <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/60">
+              <input type="checkbox" checked={selected} onChange={onToggleSelection} className="h-4 w-4 accent-[#C7A45A]" />
+              Seleccionar
+            </label>
+            <LeadStatusBadge status={lead.status} />
+            <LeadChannelBadge channel={channel} />
+            <Badge className="border-white/10 bg-white/[0.04] text-white/60">{niche.shortLabel}</Badge>
+            <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {getLeadSourceLabel(lead)}</Badge>
+            {!hasValue(message) && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Mensaje fallback</Badge>}
+          </div>
+
+          <button type="button" onClick={onDetails} className="mt-4 block max-w-full text-left">
+            <h3 className="truncate text-xl font-semibold tracking-tight text-[var(--luma-ivory)] transition hover:text-[#F5D78C]">
+              {getLeadBusinessName(lead)}
+            </h3>
+            <p className="mt-1 truncate text-sm text-[var(--luma-muted)]">
+              {getLeadPersonName(lead)} {lead.cargo_rol ? `- ${lead.cargo_rol}` : ""} {getLeadCity(lead) ? `- ${getLeadCity(lead)}` : ""}
+            </p>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 xl:justify-end">
+          <ActionButton icon={Clipboard} variant="gold" onClick={onDetails}>
+            Ver detalles
+          </ActionButton>
+          <ActionButton icon={Copy} onClick={onCopyMessage}>
+            Copiar mensaje
+          </ActionButton>
+          <ActionButton icon={MessageCircle} onClick={onOpenWhatsApp} disabled={!hasValue(whatsappNumber)}>
+            WhatsApp
+          </ActionButton>
+          <ActionButton icon={ExternalLink} onClick={onOpenInstagram} disabled={!hasValue(lead.instagram)}>
+            Instagram
+          </ActionButton>
+          <ActionButton icon={Mail} onClick={onCopyEmail} disabled={!hasValue(emailAddress)}>
+            Email
+          </ActionButton>
+          <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving}>
+            Guardar
+          </ActionButton>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InfoBlock title="WhatsApp" value={visibleValue(whatsappNumber)} />
+        <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
+        <InfoBlock title="Email" value={visibleValue(emailAddress)} />
+        <InfoBlock title="Web" value={visibleValue(webTarget)} />
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <InfoBlock title="Proximo paso" value={nextStep} />
+        <InfoBlock title="Fecha seguimiento" value={formatDate(lead.followup_due_date || lead.fecha_seguimiento)} />
+        <InfoBlock title="Oferta Luma" value={getLeadOffer(lead)} />
+        <InfoBlock title="Ticket / demo" value={`${getLeadTicket(lead)}\n${demo.label}`} />
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+        <TextPreviewBlock title="Mensaje recomendado" value={message} onCopy={onCopyMessage} actionLabel="Ver mensaje" />
+        <TextPreviewBlock title="Senal comercial" value={signal} onCopy={() => navigator.clipboard?.writeText(signal)} />
+        <TextPreviewBlock title="Oportunidad visible" value={opportunity} onCopy={() => navigator.clipboard?.writeText(opportunity)} />
+        <TextPreviewBlock title="Notas" value={notes || "Sin notas registradas."} onCopy={() => navigator.clipboard?.writeText(notes || "")} />
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <p className="luma-kicker">Cambiar estado</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionButton onClick={() => onUpdateStatus("contacted", channel)}>Contactado</ActionButton>
+            <ActionButton onClick={() => onUpdateStatus("replied", channel)}>Respondio</ActionButton>
+            <ActionButton onClick={() => onUpdateStatus("follow_up", channel)}>Seguimiento</ActionButton>
+            <ActionButton onClick={() => onUpdateStatus("call", "llamada")}>Llamada</ActionButton>
+            <ActionButton variant="gold" onClick={() => onUpdateStatus("proposal_sent", channel)}>Propuesta enviada</ActionButton>
+            <ActionButton onClick={() => onUpdateStatus("not_interested", channel)}>No interesado</ActionButton>
+          </div>
+        </div>
+        <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <p className="luma-kicker">Canal usado</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionButton onClick={() => onAssignChannel("whatsapp")}>WhatsApp</ActionButton>
+            <ActionButton onClick={() => onAssignChannel("instagram")}>Instagram</ActionButton>
+            <ActionButton onClick={() => onAssignChannel("email")}>Email</ActionButton>
+            <ActionButton onClick={() => onAssignChannel("llamada")}>Llamada</ActionButton>
+            <ActionButton onClick={() => onAssignChannel("manual")}>Manual</ActionButton>
+          </div>
+        </div>
+      </div>
+
+      {variant === "proposal" && (
+        <div className="mt-4 rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="luma-kicker">Pipeline comercial</p>
+              <p className="mt-2 text-sm leading-relaxed text-[#F5D78C]">
+                {getLeadBusinessName(lead)} - {getLeadOffer(lead)} - {getLeadTicket(lead)}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton icon={Copy} onClick={onCopyProposalSummary}>Copiar resumen</ActionButton>
+              <ActionButton icon={ExternalLink} onClick={onOpenDemo}>Abrir demo</ActionButton>
+              <ActionButton icon={Clipboard} variant="gold" onClick={onPrepareProposal}>Preparar propuesta</ActionButton>
+              <ActionButton onClick={onSaveProposalLink}>Guardar link</ActionButton>
+              <ActionButton onClick={() => onUpdateStatus("negotiating", channel)}>Negociando</ActionButton>
+              <ActionButton onClick={() => onUpdateStatus("closed", channel)}>Cerrado</ActionButton>
+              <ActionButton variant="danger" onClick={() => onUpdateStatus("lost", channel)}>Perdido</ActionButton>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <InfoBlock title="Link propuesta" value={visibleValue(lead.propuesta_link)} />
+            <InfoBlock title="Canal usado" value={CHANNEL_LABELS[channel] || String(channel)} />
+            <InfoBlock title="Fecha propuesta" value={formatDate(lead.fecha_propuesta)} />
+            <InfoBlock title="Estado propuesta" value={lead.decision_status || statusLabel(lead.status)} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionButton onClick={onSaveMaterialLink}>Guardar material/demo</ActionButton>
+            <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving}>
+              Guardar en Sheets
+            </ActionButton>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <ActionButton onClick={onToggleMore}>{expanded ? "Ocultar datos" : "Ver mas"}</ActionButton>
+        <ActionButton icon={Clipboard} onClick={onCopyContactData}>Copiar datos</ActionButton>
+        <ActionButton icon={ExternalLink} onClick={onOpenWeb} disabled={!hasValue(webTarget)}>Abrir web</ActionButton>
+        <ActionButton icon={ExternalLink} onClick={onOpenDemo}>Abrir demo</ActionButton>
+        {hasValue(reportUrl) && (
+          <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")}>
+            Ver Reporte Luma
+          </ActionButton>
+        )}
+        {variant !== "proposal" && (
+          <ActionButton icon={Clipboard} variant="gold" onClick={onPrepareProposal}>
+            Preparar propuesta
+          </ActionButton>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="mt-4 space-y-4 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <InfoBlock title="Telefono" value={visibleValue(getLeadPhoneNumber(lead))} />
+            <InfoBlock title="Reporte Luma" value={getReportDisplay(lead)} />
+            <InfoBlock title="Propuesta asociada" value={visibleValue(lead.propuesta_link)} />
+            <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
+            <InfoBlock title="Dolor probable" value={pain} />
+            <InfoBlock title="Angulo" value={lead.angulo_contacto || lead.contactAngle || "Angulo pendiente."} />
+            <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
+            <InfoBlock title="Ultimo canal" value={CHANNEL_LABELS[channel] || String(channel)} />
+          </div>
+          <textarea
+            defaultValue={notes}
+            onBlur={(event) => onNotesBlur(event.target.value)}
+            placeholder="Nota comercial: respuesta, objecion, compromiso, siguiente accion..."
+            className="luma-input min-h-24 resize-y text-sm"
+          />
+        </div>
+      )}
+    </article>
+  );
+}
+
+function LeadDetailDrawer({
+  lead,
+  open,
+  saving,
+  onClose,
+  onCopyMessage,
+  onOpenWhatsApp,
+  onOpenInstagram,
+  onCopyEmail,
+  onOpenWeb,
+  onOpenDemo,
+  onPrepareProposal,
+  onSave,
+  onUpdateStatus,
+  onAssignChannel,
+}: {
+  lead: Contact | null;
+  open: boolean;
+  saving?: boolean;
+  onClose: () => void;
+  onCopyMessage: (lead: Contact) => void;
+  onOpenWhatsApp: (lead: Contact) => void;
+  onOpenInstagram: (lead: Contact) => void;
+  onCopyEmail: (lead: Contact) => void;
+  onOpenWeb: (lead: Contact) => void;
+  onOpenDemo: (lead: Contact) => void;
+  onPrepareProposal: (lead: Contact) => void;
+  onSave: (lead: Contact) => void;
+  onUpdateStatus: (lead: Contact, status: ContactStatus, channel?: RecommendedChannel) => void;
+  onAssignChannel: (lead: Contact, channel: RecommendedChannel) => void;
+}) {
+  if (!open || !lead) return null;
+
+  const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+  const niche = getNicheDefinition(resolveLeadNiche(lead));
+  const demo = getLeadDemo(lead);
+  const message = getChannelMessage(lead, channel);
+  const emailAddress = lead.correo || lead.email || "";
+  const webTarget = lead.web || lead.audit_domain || "";
+  const reportUrl = getLeadReportUrl(lead);
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <aside
+        className="ml-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto border-l border-white/[0.1] bg-[var(--luma-surface)] p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="luma-kicker">Lead detail drawer</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h2>
+            <p className="mt-1 text-sm text-[var(--luma-muted)]">
+              {getLeadPersonName(lead)} - {niche.shortLabel}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Cerrar detalles"
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <LeadStatusBadge status={lead.status} />
+          <LeadChannelBadge channel={channel} />
+          <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {getLeadSourceLabel(lead)}</Badge>
+          <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{getLeadTicket(lead)}</Badge>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <InfoBlock title="Nombre negocio" value={getLeadBusinessName(lead)} />
+          <InfoBlock title="Persona" value={getLeadPersonName(lead)} />
+          <InfoBlock title="Nicho" value={niche.shortLabel} />
+          <InfoBlock title="Producto / oferta" value={getLeadOffer(lead)} />
+          <InfoBlock title="Ticket" value={getLeadTicket(lead)} />
+          <InfoBlock title="WhatsApp" value={visibleValue(getLeadWhatsAppNumber(lead))} />
+          <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
+          <InfoBlock title="Email" value={visibleValue(emailAddress)} />
+          <InfoBlock title="Web" value={visibleValue(webTarget)} />
+          <InfoBlock title="Estado" value={statusLabel(lead.status)} />
+          <InfoBlock title="Canal usado" value={CHANNEL_LABELS[channel] || String(channel)} />
+          <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir siguiente movimiento."} />
+          <InfoBlock title="Fecha seguimiento" value={formatDate(lead.followup_due_date || lead.fecha_seguimiento)} />
+          <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
+          <InfoBlock title="Reporte Luma" value={getReportDisplay(lead)} />
+          <InfoBlock title="Propuesta asociada" value={visibleValue(lead.propuesta_link)} />
+          <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          <TextPreviewBlock title="Mensaje recomendado" value={message} onCopy={() => onCopyMessage(lead)} actionLabel="Ver mensaje" />
+          <TextPreviewBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin notas registradas."} onCopy={() => navigator.clipboard?.writeText(String(lead.conversation_summary || lead.notas || lead.notes || ""))} />
+          <TextPreviewBlock title="Senal comercial" value={getLeadSignal(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadSignal(lead))} />
+          <TextPreviewBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadOpportunity(lead))} />
+        </div>
+
+        <div className="mt-5 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <p className="luma-kicker">Acciones manuales</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionButton icon={Copy} onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
+            <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>Abrir WhatsApp</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => onOpenInstagram(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
+            <ActionButton icon={Mail} onClick={() => onCopyEmail(lead)} disabled={!hasValue(emailAddress)}>Copiar email</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => onOpenWeb(lead)} disabled={!hasValue(webTarget)}>Abrir web</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => onOpenDemo(lead)}>Abrir demo</ActionButton>
+            {hasValue(reportUrl) && (
+              <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")}>
+                Ver Reporte Luma
+              </ActionButton>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+            <p className="luma-kicker">Marcar avance</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <ActionButton onClick={() => onUpdateStatus(lead, "contacted", channel)}>Marcar contactado</ActionButton>
+              <ActionButton onClick={() => onUpdateStatus(lead, "call", "llamada")}>Marcar llamada</ActionButton>
+              <ActionButton variant="gold" onClick={() => onUpdateStatus(lead, "proposal_sent", channel)}>Marcar propuesta enviada</ActionButton>
+              <ActionButton onClick={() => onUpdateStatus(lead, "follow_up", channel)}>Marcar seguimiento</ActionButton>
+              <ActionButton variant="danger" onClick={() => onUpdateStatus(lead, "not_interested", channel)}>Marcar no interesado</ActionButton>
+            </div>
+          </div>
+          <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+            <p className="luma-kicker">Canal usado</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <ActionButton onClick={() => onAssignChannel(lead, "whatsapp")}>WhatsApp</ActionButton>
+              <ActionButton onClick={() => onAssignChannel(lead, "instagram")}>Instagram</ActionButton>
+              <ActionButton onClick={() => onAssignChannel(lead, "email")}>Email</ActionButton>
+              <ActionButton onClick={() => onAssignChannel(lead, "llamada")}>Llamada</ActionButton>
+              <ActionButton onClick={() => onAssignChannel(lead, "manual")}>Manual</ActionButton>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 mt-5 flex flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
+          <ActionButton icon={Clipboard} variant="gold" onClick={() => onPrepareProposal(lead)}>Preparar propuesta</ActionButton>
+          <ActionButton icon={Save} variant="gold" onClick={() => onSave(lead)} disabled={saving}>Guardar en Sheets</ActionButton>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function PrepareProposalModal({
+  lead,
+  link,
+  note,
+  saving,
+  onLinkChange,
+  onNoteChange,
+  onClose,
+  onSave,
+  onCopyMessage,
+  onOpenWhatsApp,
+  onOpenInstagram,
+  onCopyEmail,
+  onOpenDemo,
+}: {
+  lead: Contact | null;
+  link: string;
+  note: string;
+  saving?: boolean;
+  onLinkChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onClose: () => void;
+  onSave: (lead: Contact) => void;
+  onCopyMessage: (lead: Contact) => void;
+  onOpenWhatsApp: (lead: Contact) => void;
+  onOpenInstagram: (lead: Contact) => void;
+  onCopyEmail: (lead: Contact) => void;
+  onOpenDemo: (lead: Contact) => void;
+}) {
+  if (!lead) return null;
+  const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+  const demo = getLeadDemo(lead);
+  const message = getChannelMessage(lead, channel);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-white/[0.1] bg-[var(--luma-surface)] p-5 shadow-2xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="luma-kicker">Preparar propuesta</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
+            <p className="mt-1 text-sm text-[var(--luma-muted)]">
+              No se envia automaticamente. Marcos copia, abre el canal y decide manualmente.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Cerrar preparar propuesta"
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <InfoBlock title="Lead" value={`${getLeadBusinessName(lead)}\n${getLeadPersonName(lead)}`} />
+          <InfoBlock title="Producto Luma recomendado" value={getLeadOffer(lead)} />
+          <InfoBlock title="Ticket sugerido" value={getLeadTicket(lead)} />
+          <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
+          <InfoBlock title="Canal recomendado" value={CHANNEL_LABELS[channel] || String(channel)} />
+          <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
+        </div>
+
+        <div className="mt-5">
+          <TextPreviewBlock title="Mensaje de propuesta" value={message} onCopy={() => onCopyMessage(lead)} actionLabel="Ver mensaje" />
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className="luma-kicker">Link propuesta</span>
+            <input
+              value={link}
+              onChange={(event) => onLinkChange(event.target.value)}
+              placeholder="Pega aqui el link de propuesta cuando exista"
+              className="luma-input mt-2"
+            />
+          </label>
+          <label className="block">
+            <span className="luma-kicker">Nota</span>
+            <textarea
+              value={note}
+              onChange={(event) => onNoteChange(event.target.value)}
+              placeholder="Nota de contexto, alcance o objecion para seguimiento"
+              className="luma-input mt-2 min-h-24 resize-y text-sm"
+            />
+          </label>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <ActionButton icon={Copy} onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
+          <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>Abrir WhatsApp</ActionButton>
+          <ActionButton icon={ExternalLink} onClick={() => onOpenInstagram(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
+          <ActionButton icon={Mail} onClick={() => onCopyEmail(lead)} disabled={!hasValue(lead.correo || lead.email)}>Copiar email</ActionButton>
+          <ActionButton icon={ExternalLink} onClick={() => onOpenDemo(lead)}>Abrir demo</ActionButton>
+          <ActionButton icon={Save} variant="gold" onClick={() => onSave(lead)} disabled={saving}>
+            Guardar propuesta en Sheets
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LumaOutreachConsole({
   workspaceSlug = DEFAULT_WORKSPACE.workspaceSlug,
   initialView = "command",
@@ -831,8 +1369,10 @@ export function LumaOutreachConsole({
   const [selectedLeadIds, setSelectedLeadIds] = useState<Record<string, boolean>>({});
   const [expandedLeadIds, setExpandedLeadIds] = useState<Record<string, boolean>>({});
   const [lastBatchSummary, setLastBatchSummary] = useState<BatchCreationSummary | null>(null);
+  const [detailDrawerLeadId, setDetailDrawerLeadId] = useState<string | null>(null);
   const [proposalDraftLeadId, setProposalDraftLeadId] = useState<string | null>(null);
   const [proposalDraftLink, setProposalDraftLink] = useState("");
+  const [proposalDraftNote, setProposalDraftNote] = useState("");
   const [sheetsSync, setSheetsSync] = useState<SheetsSyncState>({
     connected: false,
     isSyncing: false,
@@ -999,6 +1539,14 @@ export function LumaOutreachConsole({
   const selectedLeads = useMemo(
     () => contacts.filter((lead) => selectedLeadIds[lead.id]),
     [contacts, selectedLeadIds],
+  );
+  const detailDrawerLead = useMemo(
+    () => contacts.find((lead) => lead.id === detailDrawerLeadId) ?? null,
+    [contacts, detailDrawerLeadId],
+  );
+  const proposalDraftLead = useMemo(
+    () => contacts.find((lead) => lead.id === proposalDraftLeadId) ?? null,
+    [contacts, proposalDraftLeadId],
   );
 
   const metrics = useMemo(() => {
@@ -1217,6 +1765,14 @@ export function LumaOutreachConsole({
       ...prev,
       [leadId]: !prev[leadId],
     }));
+  }, []);
+
+  const openLeadDetail = useCallback((lead: Contact) => {
+    setDetailDrawerLeadId(lead.id);
+  }, []);
+
+  const closeLeadDetail = useCallback(() => {
+    setDetailDrawerLeadId(null);
   }, []);
 
   const importPreview = useMemo(() => {
@@ -1695,11 +2251,13 @@ export function LumaOutreachConsole({
   const openProposalPreparation = useCallback((lead: Contact) => {
     setProposalDraftLeadId(lead.id);
     setProposalDraftLink(String(lead.propuesta_link ?? ""));
+    setProposalDraftNote(String(lead.conversation_summary || lead.notas || lead.notes || ""));
   }, []);
 
   const closeProposalPreparation = useCallback(() => {
     setProposalDraftLeadId(null);
     setProposalDraftLink("");
+    setProposalDraftNote("");
   }, []);
 
   const saveProposalPreparation = useCallback(
@@ -1712,6 +2270,9 @@ export function LumaOutreachConsole({
         monto_estimado: lead.monto_estimado || getLeadTicket(lead),
         fecha_propuesta: lead.fecha_propuesta || today,
         decision_status: lead.decision_status || (PROPOSAL_STATUSES.has(lead.status) ? lead.status : "preparada"),
+        conversation_summary: proposalDraftNote.trim(),
+        notas: proposalDraftNote.trim(),
+        notes: proposalDraftNote.trim(),
       };
 
       patchLead(lead.id, patch);
@@ -1728,7 +2289,7 @@ export function LumaOutreachConsole({
         setToast({ message: `${getLeadBusinessName(lead)}: propuesta pendiente de guardar en Sheets. ${message}`, type: "error" });
       }
     },
-    [closeProposalPreparation, patchLead, proposalDraftLink, saveLeadPatchToSheets, saveProposalToSheets],
+    [closeProposalPreparation, patchLead, proposalDraftLink, proposalDraftNote, saveLeadPatchToSheets, saveProposalToSheets],
   );
 
   const handleImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2227,6 +2788,42 @@ export function LumaOutreachConsole({
     </div>
   );
 
+  const renderOperationalLeadCard = (lead: Contact, variant: "default" | "proposal" = "default") => {
+    const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+    const message = getChannelMessage(lead, channel);
+    const emailAddress = lead.correo || lead.email || "";
+    const demo = getLeadDemo(lead);
+
+    return (
+      <LeadOperationalCard
+        key={lead.id}
+        lead={lead}
+        selected={Boolean(selectedLeadIds[lead.id])}
+        expanded={Boolean(expandedLeadIds[lead.id])}
+        variant={variant}
+        saving={sheetsSync.isSaving}
+        onToggleSelection={() => toggleLeadSelection(lead.id)}
+        onToggleMore={() => toggleLeadExpanded(lead.id)}
+        onDetails={() => openLeadDetail(lead)}
+        onCopyMessage={() => copyText(message, "Mensaje recomendado")}
+        onCopyEmail={() => copyText(String(emailAddress), "Email")}
+        onOpenWhatsApp={() => openWhatsAppManual(lead)}
+        onOpenInstagram={() => openInstagramManual(lead)}
+        onOpenWeb={() => openWebManual(lead)}
+        onOpenDemo={() => window.open(demo.url, "_blank", "noopener,noreferrer")}
+        onSave={() => saveLeadToSheets(lead)}
+        onPrepareProposal={() => openProposalPreparation(lead)}
+        onUpdateStatus={(status, nextChannel) => updateLeadStatus(lead, status, nextChannel ?? channel)}
+        onAssignChannel={(nextChannel) => assignLeadChannel(lead, nextChannel)}
+        onCopyContactData={() => copyContactData(lead)}
+        onCopyProposalSummary={() => copyText(buildProposalSummary(lead), "Resumen de propuesta")}
+        onSaveProposalLink={() => saveProposalLink(lead, "propuesta_link", "link de propuesta")}
+        onSaveMaterialLink={() => saveProposalLink(lead, "material_link", "link de material o demo")}
+        onNotesBlur={(value) => saveLeadNotes(lead, value)}
+      />
+    );
+  };
+
   const renderBatchSummary = () => {
     if (!lastBatchSummary) return null;
     return (
@@ -2235,19 +2832,21 @@ export function LumaOutreachConsole({
           <div>
             <p className="luma-kicker">Resumen del lote desde Sheets</p>
             <p className="mt-2 text-sm leading-relaxed text-[#F5D78C]">
-              Se crearon {lastBatchSummary.incluidos_lote} leads porque solo esos cumplen canal visible, estado elegible y no contacto reciente.
+              {lastBatchSummary.motivo_principal ||
+                `Se crearon ${lastBatchSummary.incluidos_lote} leads porque solo esos cumplen canal visible, estado elegible y no contacto reciente.`}
             </p>
           </div>
           <Badge className="border-[#C7A45A]/30 bg-[#C7A45A]/10 text-[#F5D78C]">Guardado en Sheets</Badge>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <MiniStat label="Total evaluados" value={lastBatchSummary.total_evaluados} />
+          <MiniStat label="Incluidos" value={lastBatchSummary.incluidos_lote} />
           <MiniStat label="Con WhatsApp" value={lastBatchSummary.con_whatsapp} />
           <MiniStat label="Con Instagram" value={lastBatchSummary.con_instagram} />
           <MiniStat label="Estado bloqueante" value={lastBatchSummary.excluidos_estado_bloqueante} />
           <MiniStat label="Falta canal" value={lastBatchSummary.excluidos_falta_canal} />
           <MiniStat label="Contacto reciente" value={lastBatchSummary.excluidos_contacto_reciente} />
-          <MiniStat label="Incluidos" value={lastBatchSummary.incluidos_lote} />
+          <MiniStat label="Sin mensaje" value={lastBatchSummary.sin_mensaje ?? 0} />
         </div>
       </div>
     );
@@ -2733,9 +3332,6 @@ export function LumaOutreachConsole({
           <SegmentButton active={todayFilter === "interested"} onClick={() => setTodayFilter(todayFilter === "interested" ? "all" : "interested")} icon={UserCheck}>
             Ver interesados
           </SegmentButton>
-          <SegmentButton active={todayCompact} onClick={() => setTodayCompact((value) => !value)} icon={Gauge}>
-            Modo compacto
-          </SegmentButton>
         </div>
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/[0.35]" size={16} />
@@ -2760,7 +3356,7 @@ export function LumaOutreachConsole({
           {visibleTodayBatch.length === 0 ? (
             <EmptyState icon={Search} title="No hay resultados en este lote." body="Cambia la busqueda local o limpia filtros para continuar." />
           ) : (
-            visibleTodayBatch.map((lead) => (todayCompact ? renderCompactLead(lead) : renderLeadCard(lead)))
+            visibleTodayBatch.map((lead) => renderOperationalLeadCard(lead))
           )}
         </div>
       )}
@@ -2782,7 +3378,7 @@ export function LumaOutreachConsole({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por negocio, persona, canal, ciudad, dolor u oportunidad..."
+              placeholder="Buscar por nombre, negocio, persona, telefono, WhatsApp, Instagram, email, nicho, estado, oferta o notas..."
               className="luma-input pl-10"
             />
           </div>
@@ -2897,16 +3493,11 @@ export function LumaOutreachConsole({
       </div>
       {renderSelectionToolbar(visibleProspectRows, "Prospectos")}
 
-      <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]">
-        <div className="hidden grid-cols-[1.15fr_0.9fr_1.4fr] gap-4 border-b border-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.35] xl:grid">
-          <span>Prospecto</span>
-          <span>Contacto visible</span>
-          <span>Acciones operativas</span>
-        </div>
+      <div className="space-y-4">
         {filteredLeads.length === 0 ? (
           <EmptyState title="No hay resultados con estos filtros." body="Limpia filtros o cambia busqueda." />
         ) : (
-          visibleProspectRows.map((lead) => renderProspectOperationalRow(lead))
+          visibleProspectRows.map((lead) => renderOperationalLeadCard(lead))
         )}
       </div>
     </section>
@@ -2939,91 +3530,8 @@ export function LumaOutreachConsole({
         {leads.length === 0 ? (
           <EmptyState icon={RefreshCw} title="Aun no hay leads en seguimiento." body="Marca contactados, respuestas o interesados desde el lote de hoy." />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {leads.map((lead) => {
-              const channel = getRecommendedChannel(lead);
-              const message = getChannelMessage(lead, channel);
-              const dueDate = lead.followup_due_date || lead.fecha_seguimiento || "";
-              const lastNote = lead.notas || lead.notes || "Sin nota registrada.";
-              const summary = lead.conversation_summary || "Sin resumen registrado.";
-              const reportUrl = getLeadReportUrl(lead);
-              const demo = getLeadDemo(lead);
-
-              return (
-                <article key={lead.id} className="luma-lead-card">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap gap-2">
-                        {renderLeadSelectionControl(lead)}
-                        <LeadStatusBadge status={lead.status} />
-                        <LeadChannelBadge channel={channel} />
-                        <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {getLeadSourceLabel(lead)}</Badge>
-                      </div>
-                      <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
-                      <p className="mt-1 text-sm text-[var(--luma-muted)]">
-                        {getLeadPersonName(lead)} - {getNicheDefinition(resolveLeadNiche(lead)).shortLabel}
-                      </p>
-                    </div>
-                    {renderLeadOperationalActions(lead, channel)}
-                  </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <InfoBlock title="Nombre del negocio" value={getLeadBusinessName(lead)} />
-                    <InfoBlock title="Persona" value={getLeadPersonName(lead)} />
-                    <InfoBlock title="WhatsApp" value={visibleValue(getLeadWhatsAppNumber(lead))} />
-                    <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
-                    <InfoBlock title="Email" value={visibleValue(lead.correo || lead.email)} />
-                    <InfoBlock title="Web" value={visibleValue(lead.web || lead.audit_domain)} />
-                    <InfoBlock title="Estado actual" value={statusLabel(lead.status)} />
-                    <InfoBlock title="Canal ultimo usado" value={CHANNEL_LABELS[(lead.last_channel || lead.ultimo_canal_usado || channel) as RecommendedChannel] || String(lead.last_channel || lead.ultimo_canal_usado || "Sin canal")} />
-                    <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir proximo movimiento."} />
-                    <InfoBlock title="Fecha seguimiento" value={formatDate(dueDate)} />
-                    <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
-                    <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
-                    <InfoBlock title="Mensaje recomendado" value={message} />
-                    <InfoBlock title="Notas" value={`${lastNote}\n\nResumen: ${summary}`} />
-                    <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
-                    <InfoBlock title="Intentos / ultima interaccion" value={`${lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0}\n${formatDate(lead.last_interaction_date || lead.fecha_contacto || lead.lastContactDate)}`} />
-                  </div>
-
-                  {hasValue(reportUrl) && (
-                    <div className="mt-4">
-                      <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")}>
-                        Ver Reporte Luma
-                      </ActionButton>
-                    </div>
-                  )}
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr]">
-                    <input
-                      defaultValue={dueDate}
-                      onBlur={(event) => patchLead(lead.id, { followup_due_date: event.target.value, fecha_seguimiento: event.target.value })}
-                      placeholder="YYYY-MM-DD"
-                      className="luma-input text-sm"
-                    />
-                    <textarea
-                      defaultValue={lead.conversation_summary || lead.notas || lead.notes || ""}
-                      onBlur={(event) => patchLead(lead.id, { conversation_summary: event.target.value, notas: event.target.value, notes: event.target.value })}
-                      placeholder="Resumen local de conversacion, objecion o compromiso..."
-                      className="luma-input min-h-20 resize-y text-sm"
-                    />
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje recomendado")}>Copiar mensaje</ActionButton>
-                    <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>Abrir WhatsApp</ActionButton>
-                    <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
-                    <ActionButton icon={Mail} onClick={() => copyText(String(lead.correo || lead.email || ""), "Email")} disabled={!hasValue(lead.correo || lead.email)}>Copiar email</ActionButton>
-                    <ActionButton icon={ExternalLink} onClick={() => openWebManual(lead)} disabled={!hasValue(lead.web || lead.audit_domain)}>Abrir web</ActionButton>
-                    <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Marcar respondio</ActionButton>
-                    <ActionButton onClick={() => updateLeadStatus(lead, "call", "llamada")}>Marcar llamada</ActionButton>
-                    <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", channel)}>Marcar propuesta enviada</ActionButton>
-                    <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", channel)}>Sin accion por ahora</ActionButton>
-                    <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Guardar en Sheets</ActionButton>
-                  </div>
-                </article>
-              );
-            })}
+          <div className="space-y-4">
+            {leads.map((lead) => renderOperationalLeadCard(lead))}
           </div>
         )}
       </section>
@@ -3118,95 +3626,7 @@ export function LumaOutreachConsole({
           <EmptyState icon={FileSpreadsheet} title="No hay propuestas activas." body="Cuando una llamada avance, marca propuesta enviada y deja el proximo paso." />
         ) : (
           <div className="space-y-4">
-            {leads.map((lead) => {
-              const niche = getNicheDefinition(resolveLeadNiche(lead));
-              const ticket = getLeadTicket(lead);
-              const demo = getLeadDemo(lead);
-              const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
-              const summary = [
-                `Prospecto: ${getLeadBusinessName(lead)}`,
-                `Nicho: ${niche.shortLabel}`,
-                `Oferta recomendada: ${getLeadOffer(lead)}`,
-                `Ticket sugerido: ${ticket}`,
-                `Demo asociada: ${demo.label} - ${demo.url}`,
-                `Canal usado: ${CHANNEL_LABELS[channel] || channel}`,
-                `Fecha: ${formatDate(lead.fecha_propuesta)}`,
-                `Estado: ${statusLabel(lead.status)}`,
-                `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
-                `Nota comercial: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
-                `Link propuesta: ${visibleValue(lead.propuesta_link)}`,
-                `Link material o demo: ${visibleValue(lead.material_link || demo.url)}`,
-                `Monto estimado: ${visibleValue(lead.monto_estimado)}`,
-              ].join("\n");
-
-              return (
-                <article key={lead.id} className="luma-lead-card">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap gap-2">
-                        {renderLeadSelectionControl(lead)}
-                        <LeadStatusBadge status={lead.status} />
-                        <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{ticket}</Badge>
-                        <Badge className="border-white/10 bg-white/[0.04] text-white/60">{demo.label}</Badge>
-                        <LeadChannelBadge channel={getRecommendedChannel(lead)} />
-                      </div>
-                      <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
-                      <p className="mt-1 text-sm text-[var(--luma-muted)]">{getLeadPersonName(lead)} - {niche.shortLabel}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <ActionButton icon={Copy} onClick={() => copyText(summary, "Resumen de propuesta")}>Copiar resumen de propuesta</ActionButton>
-                      <ActionButton icon={ExternalLink} onClick={() => window.open(demo.url, "_blank", "noopener,noreferrer")}>Abrir demo</ActionButton>
-                      <ActionButton icon={Clipboard} variant="gold" onClick={() => openProposalPreparation(lead)}>Preparar propuesta</ActionButton>
-                      <ActionButton onClick={() => saveProposalLink(lead, "propuesta_link", "link de propuesta")}>Guardar link de propuesta</ActionButton>
-                      <ActionButton onClick={() => saveProposalLink(lead, "material_link", "link de material o demo")}>Guardar link de material/demo</ActionButton>
-                      <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", getRecommendedChannel(lead))}>Marcar enviada</ActionButton>
-                      <ActionButton onClick={() => updateLeadStatus(lead, "negotiating", getRecommendedChannel(lead))}>Marcar negociando</ActionButton>
-                      <ActionButton onClick={() => updateLeadStatus(lead, "closed", getRecommendedChannel(lead))}>Marcar cerrado</ActionButton>
-                      <ActionButton variant="danger" onClick={() => updateLeadStatus(lead, "lost", getRecommendedChannel(lead))}>Marcar perdido</ActionButton>
-                      <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Guardar en Sheets</ActionButton>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <InfoBlock title="Prospecto" value={getLeadBusinessName(lead)} />
-                    <InfoBlock title="Nicho" value={niche.shortLabel} />
-                    <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
-                    <InfoBlock title="Ticket sugerido" value={ticket} />
-                    <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
-                    <InfoBlock title="Canal usado" value={CHANNEL_LABELS[channel] || String(channel)} />
-                    <InfoBlock title="Fecha" value={formatDate(lead.fecha_propuesta)} />
-                    <InfoBlock title="Estado actual" value={statusLabel(lead.status)} />
-                    <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
-                    <InfoBlock title="Link propuesta" value={visibleValue(lead.propuesta_link)} />
-                    <InfoBlock title="Link material o demo" value={visibleValue(lead.material_link || demo.url)} />
-                    <InfoBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
-                    <InfoBlock title="Monto estimado" value={visibleValue(lead.monto_estimado)} />
-                    <InfoBlock title="Decision status" value={visibleValue(lead.decision_status)} />
-                  </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-3">
-                    <input
-                      defaultValue={String(lead.monto_estimado ?? "")}
-                      onBlur={(event) => patchLead(lead.id, { monto_estimado: event.target.value })}
-                      placeholder="Monto estimado"
-                      className="luma-input text-sm"
-                    />
-                    <input
-                      defaultValue={lead.fecha_propuesta || ""}
-                      onBlur={(event) => patchLead(lead.id, { fecha_propuesta: event.target.value })}
-                      placeholder="Fecha propuesta YYYY-MM-DD"
-                      className="luma-input text-sm"
-                    />
-                    <input
-                      defaultValue={lead.decision_status || ""}
-                      onBlur={(event) => patchLead(lead.id, { decision_status: event.target.value })}
-                      placeholder="Decision status"
-                      className="luma-input text-sm"
-                    />
-                  </div>
-                </article>
-              );
-            })}
+            {leads.map((lead) => renderOperationalLeadCard(lead, "proposal"))}
           </div>
         )}
       </section>
@@ -3782,7 +4202,37 @@ export function LumaOutreachConsole({
           {toast.message}
         </div>
       )}
-      {renderProposalPreparationModal()}
+      <LeadDetailDrawer
+        lead={detailDrawerLead}
+        open={Boolean(detailDrawerLead)}
+        saving={sheetsSync.isSaving}
+        onClose={closeLeadDetail}
+        onCopyMessage={(lead) => copyText(getChannelMessage(lead, (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel), "Mensaje recomendado")}
+        onOpenWhatsApp={openWhatsAppManual}
+        onOpenInstagram={openInstagramManual}
+        onCopyEmail={(lead) => copyText(String(lead.correo || lead.email || ""), "Email")}
+        onOpenWeb={openWebManual}
+        onOpenDemo={(lead) => window.open(getLeadDemo(lead).url, "_blank", "noopener,noreferrer")}
+        onPrepareProposal={openProposalPreparation}
+        onSave={saveLeadToSheets}
+        onUpdateStatus={updateLeadStatus}
+        onAssignChannel={assignLeadChannel}
+      />
+      <PrepareProposalModal
+        lead={proposalDraftLead}
+        link={proposalDraftLink}
+        note={proposalDraftNote}
+        saving={sheetsSync.isSaving}
+        onLinkChange={setProposalDraftLink}
+        onNoteChange={setProposalDraftNote}
+        onClose={closeProposalPreparation}
+        onSave={saveProposalPreparation}
+        onCopyMessage={(lead) => copyText(getChannelMessage(lead, (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel), "Mensaje de propuesta")}
+        onOpenWhatsApp={openWhatsAppManual}
+        onOpenInstagram={openInstagramManual}
+        onCopyEmail={(lead) => copyText(String(lead.correo || lead.email || ""), "Email")}
+        onOpenDemo={(lead) => window.open(getLeadDemo(lead).url, "_blank", "noopener,noreferrer")}
+      />
     </main>
   );
 }
