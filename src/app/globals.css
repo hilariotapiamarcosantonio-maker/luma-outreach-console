@@ -96,7 +96,7 @@ textarea:focus-visible {
     padding: 1.25rem;
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
     animation: luma-card-in 180ms ease both;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   .luma-lead-card:hover {
@@ -130,7 +130,7 @@ textarea:focus-visible {
   .luma-input,
   .luma-upload,
   .luma-nav-item {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   .luma-input {
