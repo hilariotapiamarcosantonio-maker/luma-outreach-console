@@ -149,6 +149,17 @@ type SheetsSyncState = {
   mode: "google_sheets" | "local_fallback";
 };
 
+type BatchCreationSummary = {
+  total_evaluados: number;
+  con_whatsapp: number;
+  con_instagram: number;
+  excluidos_estado_bloqueante: number;
+  excluidos_falta_canal: number;
+  excluidos_contacto_reciente: number;
+  excluidos_lote_activo?: number;
+  incluidos_lote: number;
+};
+
 interface LumaOutreachConsoleProps {
   workspaceSlug?: string;
   initialView?: ViewKey;
@@ -585,6 +596,64 @@ function isReviewLead(lead: Contact) {
   return REVIEW_STATUSES.has(lead.status) || getReviewReasons(lead).length > 0;
 }
 
+function buildLeadSearchText(lead: Contact) {
+  const niche = getNicheDefinition(resolveLeadNiche(lead));
+  const demo = getLeadDemo(lead);
+  return [
+    getLeadBusinessName(lead),
+    getLeadPersonName(lead),
+    lead.name,
+    lead.nombre_negocio,
+    lead.nombre_persona,
+    lead.phone,
+    lead.telefono,
+    getLeadPhoneNumber(lead),
+    getLeadWhatsAppNumber(lead),
+    lead.whatsapp,
+    lead.instagram,
+    lead.correo,
+    lead.email,
+    lead.web,
+    lead.audit_domain,
+    niche.label,
+    niche.shortLabel,
+    lead.nicho,
+    statusLabel(lead.status),
+    lead.estado,
+    CHANNEL_LABELS[getRecommendedChannel(lead)],
+    lead.last_channel,
+    lead.ultimo_canal_usado,
+    lead.proximo_paso,
+    lead.nextStep,
+    lead.fecha_contacto,
+    lead.fecha_seguimiento,
+    lead.followup_due_date,
+    getLeadOffer(lead),
+    getLeadTicket(lead),
+    lead.monto_estimado,
+    lead.decision_status,
+    lead.propuesta_link,
+    lead.material_link,
+    demo.label,
+    demo.url,
+    lead.notas,
+    lead.notes,
+    lead.conversation_summary,
+    lead.senal_comercial,
+    lead.dolor_probable,
+    lead.oportunidad_visible,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function leadMatchesQuery(lead: Contact, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return buildLeadSearchText(lead).includes(normalized);
+}
+
 function readUpload(file: File): Promise<ParsedUpload> {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -752,10 +821,18 @@ export function LumaOutreachConsole({
   const [importMode, setImportMode] = useState<ImportMode>("replace");
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [todayFilter, setTodayFilter] = useState<"all" | "pending" | "contacted" | "interested">("all");
+  const [todaySearch, setTodaySearch] = useState("");
+  const [followupSearch, setFollowupSearch] = useState("");
+  const [proposalSearch, setProposalSearch] = useState("");
   const [todayCompact, setTodayCompact] = useState(false);
   const [prospectsPage, setProspectsPage] = useState(1);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Record<string, boolean>>({});
+  const [expandedLeadIds, setExpandedLeadIds] = useState<Record<string, boolean>>({});
+  const [lastBatchSummary, setLastBatchSummary] = useState<BatchCreationSummary | null>(null);
+  const [proposalDraftLeadId, setProposalDraftLeadId] = useState<string | null>(null);
+  const [proposalDraftLink, setProposalDraftLink] = useState("");
   const [sheetsSync, setSheetsSync] = useState<SheetsSyncState>({
     connected: false,
     isSyncing: false,
@@ -882,7 +959,7 @@ export function LumaOutreachConsole({
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3200);
+    const timer = window.setTimeout(() => setToast(null), 5200);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -914,6 +991,15 @@ export function LumaOutreachConsole({
     : routeBatchId
       ? `Lote ${routeBatchId}`
       : workspaceConfig.workspaceSlug;
+  const commercialFrontCount = useMemo(() => Math.max(NICHES.length, PRODUCT_CATALOG.length), []);
+  const selectedLeadIdList = useMemo(
+    () => Object.entries(selectedLeadIds).filter(([, selected]) => selected).map(([id]) => id),
+    [selectedLeadIds],
+  );
+  const selectedLeads = useMemo(
+    () => contacts.filter((lead) => selectedLeadIds[lead.id]),
+    [contacts, selectedLeadIds],
+  );
 
   const metrics = useMemo(() => {
     const total = contacts.length;
@@ -1008,11 +1094,16 @@ export function LumaOutreachConsole({
   }, [todayBatch]);
 
   const visibleTodayBatch = useMemo(() => {
-    if (todayFilter === "pending") return todayBatch.filter((lead) => CONTACTABLE_STATUSES.has(lead.status));
-    if (todayFilter === "contacted") return todayBatch.filter((lead) => Number(lead.cantidad_contactos ?? lead.sentCount ?? 0) > 0 || lead.status === "contacted");
-    if (todayFilter === "interested") return todayBatch.filter((lead) => ["interested", "follow_up", "call", "appointment", "proposal_sent", "propuesta_enviada", "negotiating", "closed"].includes(lead.status));
-    return todayBatch;
-  }, [todayBatch, todayFilter]);
+    const filteredByStatus =
+      todayFilter === "pending"
+        ? todayBatch.filter((lead) => CONTACTABLE_STATUSES.has(lead.status))
+        : todayFilter === "contacted"
+          ? todayBatch.filter((lead) => Number(lead.cantidad_contactos ?? lead.sentCount ?? 0) > 0 || lead.status === "contacted")
+          : todayFilter === "interested"
+            ? todayBatch.filter((lead) => ["interested", "follow_up", "call", "appointment", "proposal_sent", "propuesta_enviada", "negotiating", "closed"].includes(lead.status))
+            : todayBatch;
+    return filteredByStatus.filter((lead) => leadMatchesQuery(lead, todaySearch));
+  }, [todayBatch, todayFilter, todaySearch]);
 
   const getLeadImportDate = useCallback(
     (lead: Contact) => lead.imported_at || lead.active_batch_created_at || (lead.imported_file_name === state.workspace?.lastImportedFileName ? state.workspace?.lastImportDate : undefined),
@@ -1022,24 +1113,7 @@ export function LumaOutreachConsole({
   const filteredLeads = useMemo(() => {
     return [...contacts]
       .filter((lead) => {
-        const searchText = [
-          getLeadBusinessName(lead),
-          getLeadPersonName(lead),
-          CHANNEL_LABELS[getRecommendedChannel(lead)],
-          lead.correo,
-          lead.instagram,
-          lead.linkedin,
-          lead.web,
-          lead.ciudad_zona,
-          lead.senal_comercial,
-          lead.dolor_probable,
-          lead.oportunidad_visible,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        if (search && !searchText.includes(search.toLowerCase())) return false;
+        if (!leadMatchesQuery(lead, search)) return false;
         if (nicheFilter !== "all" && resolveLeadNiche(lead) !== nicheFilter) return false;
         if (priorityFilter !== "all" && (lead.prioridad || lead.priority || "sin prioridad") !== priorityFilter) return false;
         if (channelFilter !== "all" && getRecommendedChannel(lead) !== channelFilter) return false;
@@ -1115,6 +1189,34 @@ export function LumaOutreachConsole({
   const handleMobileNavSelect = useCallback((view: ViewKey) => {
     setActiveView(view);
     setMobileMenuOpen(false);
+  }, []);
+
+  const toggleLeadSelection = useCallback((leadId: string) => {
+    setSelectedLeadIds((prev) => ({
+      ...prev,
+      [leadId]: !prev[leadId],
+    }));
+  }, []);
+
+  const selectVisibleLeads = useCallback((leads: Contact[]) => {
+    setSelectedLeadIds((prev) => {
+      const next = { ...prev };
+      leads.forEach((lead) => {
+        next[lead.id] = true;
+      });
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedLeadIds({});
+  }, []);
+
+  const toggleLeadExpanded = useCallback((leadId: string) => {
+    setExpandedLeadIds((prev) => ({
+      ...prev,
+      [leadId]: !prev[leadId],
+    }));
   }, []);
 
   const importPreview = useMemo(() => {
@@ -1268,6 +1370,35 @@ export function LumaOutreachConsole({
     }
   }, [contacts, dirtyLeadPatches, saveLeadPatchToSheets]);
 
+  const saveLeadToSheets = useCallback(
+    async (lead: Contact, explicitPatch?: Partial<Contact>) => {
+      const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+      const patch: Partial<Contact> = explicitPatch ?? dirtyLeadPatches[lead.id] ?? {
+        status: lead.status,
+        estado: lead.status,
+        proximo_paso: lead.proximo_paso || lead.nextStep || "",
+        nextStep: lead.nextStep || lead.proximo_paso || "",
+        ultimo_canal_usado: channel,
+        last_channel: channel,
+        propuesta_link: lead.propuesta_link || "",
+        material_link: lead.material_link || "",
+        monto_estimado: lead.monto_estimado || "",
+        fecha_propuesta: lead.fecha_propuesta || "",
+        decision_status: lead.decision_status || "",
+      };
+
+      try {
+        await saveLeadPatchToSheets(lead, patch);
+        setToast({ message: `${getLeadBusinessName(lead)}: Guardado en Sheets.`, type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No pude guardar en Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message: `${getLeadBusinessName(lead)}: Pendiente de guardar en Sheets. ${message}`, type: "error" });
+      }
+    },
+    [dirtyLeadPatches, saveLeadPatchToSheets],
+  );
+
   const updateLeadStatus = useCallback(
     async (lead: Contact, status: ContactStatus, channel?: RecommendedChannel) => {
       const now = new Date().toISOString();
@@ -1323,20 +1454,105 @@ export function LumaOutreachConsole({
       };
 
       patchLead(lead.id, patch);
-      setToast({ message: `${getLeadBusinessName(lead)} actualizado: ${statusLabel(status)}. Guardando en Sheets...`, type: "info" });
+      setToast({ message: `${getLeadBusinessName(lead)}: ${statusLabel(status)}. Guardando en Sheets...`, type: "info" });
 
       try {
         await saveLeadPatchToSheets(lead, patch, { incrementContactCount: countsAsContactCount });
         if (isProposalStatus) await saveProposalToSheets({ ...lead, ...patch } as Contact);
-        setToast({ message: `${getLeadBusinessName(lead)} guardado en Google Sheets.`, type: "success" });
+        setToast({ message: `${getLeadBusinessName(lead)}: ${statusLabel(status)}. Guardado en Sheets.`, type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Cambio local guardado; fallo Google Sheets.";
         setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
-        setToast({ message, type: "error" });
+        setToast({ message: `${getLeadBusinessName(lead)}: ${statusLabel(status)}. Pendiente de guardar en Sheets. ${message}`, type: "error" });
       }
     },
     [patchLead, saveLeadPatchToSheets, saveProposalToSheets],
   );
+
+  const assignLeadChannel = useCallback(
+    (lead: Contact, channel: RecommendedChannel) => {
+      patchLead(lead.id, { ultimo_canal_usado: channel, last_channel: channel });
+      setToast({ message: `${getLeadBusinessName(lead)}: canal ${CHANNEL_LABELS[channel]} asignado. Pendiente de guardar en Sheets.`, type: "info" });
+    },
+    [patchLead],
+  );
+
+  const createBatchFromSelection = useCallback(() => {
+    if (selectedLeads.length === 0) {
+      setToast({ message: "Selecciona al menos un prospecto para crear lote.", type: "error" });
+      return;
+    }
+    const now = new Date().toISOString();
+    const dateLabel = new Date().toLocaleDateString();
+    const mainNiche = resolveLeadNiche(selectedLeads[0]);
+    const batchName = `Lote seleccionado - ${getNicheDefinition(mainNiche).shortLabel} - ${dateLabel}`;
+    const selectedIds = new Set(selectedLeads.map((lead) => lead.id));
+    const activeBatchLeadIds = selectedLeads.map((lead) => lead.id);
+
+    setState((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((lead) =>
+        selectedIds.has(lead.id)
+          ? {
+              ...lead,
+              active_batch_name: batchName,
+              active_batch_created_at: now,
+              active_batch_order: activeBatchLeadIds.indexOf(lead.id) + 1,
+            }
+          : lead,
+      ),
+      workspace: {
+        ...(prev.workspace ?? {
+          activeLeadCount: prev.contacts.length,
+          activeNiches: Array.from(new Set(prev.contacts.map((item) => resolveLeadNiche(item)))),
+        }),
+        activeBatchName: batchName,
+        activeBatchCreatedAt: now,
+        activeBatchSourceFile: "Seleccion manual",
+        activeBatchMainNiche: mainNiche,
+        activeBatchLeadIds,
+      },
+    }));
+    setToast({ message: `${selectedLeads.length} prospectos seleccionados quedaron en Lote de Hoy.`, type: "success" });
+    setActiveView("today");
+  }, [selectedLeads]);
+
+  const updateSelectedStatus = useCallback(
+    async (status: ContactStatus) => {
+      if (selectedLeads.length === 0) {
+        setToast({ message: "Selecciona prospectos antes de cambiar estado.", type: "error" });
+        return;
+      }
+      for (const lead of selectedLeads) {
+        await updateLeadStatus(lead, status, (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel);
+      }
+    },
+    [selectedLeads, updateLeadStatus],
+  );
+
+  const assignSelectedChannel = useCallback(
+    (channel: RecommendedChannel) => {
+      if (selectedLeads.length === 0) {
+        setToast({ message: "Selecciona prospectos antes de asignar canal.", type: "error" });
+        return;
+      }
+      selectedLeads.forEach((lead) => {
+        patchLead(lead.id, { ultimo_canal_usado: channel, last_channel: channel });
+      });
+      setToast({ message: `${selectedLeads.length} prospectos asignados a ${CHANNEL_LABELS[channel]}. Pendiente de guardar en Sheets.`, type: "info" });
+    },
+    [patchLead, selectedLeads],
+  );
+
+  const saveSelectedLeadsToSheets = useCallback(async () => {
+    if (selectedLeads.length === 0) {
+      setToast({ message: "Selecciona prospectos antes de guardar.", type: "error" });
+      return;
+    }
+    for (const lead of selectedLeads) {
+      await saveLeadToSheets(lead);
+    }
+  }, [saveLeadToSheets, selectedLeads]);
 
   const saveLeadNotes = useCallback(
     async (lead: Contact, notes: string) => {
@@ -1364,7 +1580,10 @@ export function LumaOutreachConsole({
   const openWhatsAppManual = useCallback(
     (lead: Contact) => {
       const message = getChannelMessage(lead, "whatsapp");
-      const link = generateWhatsAppLink(getLeadWhatsAppNumber(lead), message, true);
+      const isMobileTarget =
+        typeof navigator !== "undefined" &&
+        (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768);
+      const link = generateWhatsAppLink(getLeadWhatsAppNumber(lead), message, !isMobileTarget);
       if (!link) {
         setToast({ message: "Este prospecto no tiene WhatsApp valido.", type: "error" });
         return;
@@ -1372,7 +1591,7 @@ export function LumaOutreachConsole({
 
       window.open(link, "_blank", "noopener,noreferrer");
       patchLead(lead.id, { ultimo_canal_usado: "whatsapp", last_channel: "whatsapp" }, { markDirty: false });
-      setToast({ message: "WhatsApp Web abierto con mensaje prellenado. Envio manual solamente.", type: "info" });
+      setToast({ message: `${isMobileTarget ? "WhatsApp mobile" : "WhatsApp Web"} abierto. Envio manual solamente.`, type: "info" });
     },
     [patchLead],
   );
@@ -1388,6 +1607,22 @@ export function LumaOutreachConsole({
       window.open(link, "_blank", "noopener,noreferrer");
       patchLead(lead.id, { ultimo_canal_usado: "instagram", last_channel: "instagram" }, { markDirty: false });
       setToast({ message: "Instagram abierto. Copia el mensaje y contacta manualmente.", type: "info" });
+    },
+    [patchLead],
+  );
+
+  const openEmailManual = useCallback(
+    (lead: Contact) => {
+      const emailAddress = lead.correo || lead.email || "";
+      if (!hasValue(emailAddress)) {
+        setToast({ message: "Este prospecto no tiene email visible.", type: "error" });
+        return;
+      }
+      const subject = encodeURIComponent(getEmailSubject(lead));
+      const body = encodeURIComponent(getChannelMessage(lead, "email"));
+      window.open(`mailto:${emailAddress}?subject=${subject}&body=${body}`, "_self");
+      patchLead(lead.id, { ultimo_canal_usado: "email", last_channel: "email" }, { markDirty: false });
+      setToast({ message: "Email manual abierto. Revisa y envia desde tu cliente de correo.", type: "info" });
     },
     [patchLead],
   );
@@ -1452,9 +1687,48 @@ export function LumaOutreachConsole({
       const value = window.prompt(`Guardar ${label}`, currentValue);
       if (value === null) return;
       patchLead(lead.id, { [field]: value.trim() } as Partial<Contact>);
-      setToast({ message: `${label} guardado en localStorage.`, type: "success" });
+      setToast({ message: `${label} guardado. Pendiente de guardar en Sheets.`, type: "info" });
     },
     [patchLead],
+  );
+
+  const openProposalPreparation = useCallback((lead: Contact) => {
+    setProposalDraftLeadId(lead.id);
+    setProposalDraftLink(String(lead.propuesta_link ?? ""));
+  }, []);
+
+  const closeProposalPreparation = useCallback(() => {
+    setProposalDraftLeadId(null);
+    setProposalDraftLink("");
+  }, []);
+
+  const saveProposalPreparation = useCallback(
+    async (lead: Contact) => {
+      const demo = getLeadDemo(lead);
+      const today = new Date().toISOString().slice(0, 10);
+      const patch: Partial<Contact> = {
+        propuesta_link: proposalDraftLink.trim(),
+        material_link: lead.material_link || demo.url,
+        monto_estimado: lead.monto_estimado || getLeadTicket(lead),
+        fecha_propuesta: lead.fecha_propuesta || today,
+        decision_status: lead.decision_status || (PROPOSAL_STATUSES.has(lead.status) ? lead.status : "preparada"),
+      };
+
+      patchLead(lead.id, patch);
+      try {
+        await saveLeadPatchToSheets(lead, patch);
+        if (PROPOSAL_STATUSES.has(lead.status)) {
+          await saveProposalToSheets({ ...lead, ...patch } as Contact);
+        }
+        setToast({ message: `${getLeadBusinessName(lead)}: propuesta preparada y guardada en Sheets.`, type: "success" });
+        closeProposalPreparation();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No pude guardar la propuesta en Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message: `${getLeadBusinessName(lead)}: propuesta pendiente de guardar en Sheets. ${message}`, type: "error" });
+      }
+    },
+    [closeProposalPreparation, patchLead, proposalDraftLink, saveLeadPatchToSheets, saveProposalToSheets],
   );
 
   const handleImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1723,6 +1997,7 @@ export function LumaOutreachConsole({
           throw new Error(payload.error || "No pude crear el lote desde Sheets.");
         }
 
+        const summary = payload.summary as BatchCreationSummary | undefined;
         const now = new Date().toISOString();
         const batchLeads = ((payload.leads ?? []) as Contact[]).map((lead, index) =>
           normalizeLoadedContact({
@@ -1769,6 +2044,7 @@ export function LumaOutreachConsole({
             },
           };
         });
+        setLastBatchSummary(summary ?? null);
         setSheetsSync((prev) => ({
           ...prev,
           connected: true,
@@ -1776,7 +2052,12 @@ export function LumaOutreachConsole({
           lastSaveAt: now,
           mode: "google_sheets",
         }));
-        setToast({ message: `${payload.total ?? batchLeads.length} prospectos agregados al lote ${payload.batch_id}.`, type: "success" });
+        setToast({
+          message: summary
+            ? `Se crearon ${summary.incluidos_lote} leads porque cumplen canal visible, estado elegible y no contacto reciente. Guardado en Sheets.`
+            : `${payload.total ?? batchLeads.length} prospectos agregados al lote ${payload.batch_id}. Guardado en Sheets.`,
+          type: "success",
+        });
         setActiveView("today");
       } catch (error) {
         const message = error instanceof Error ? error.message : "No pude crear el lote desde Sheets.";
@@ -1786,6 +2067,191 @@ export function LumaOutreachConsole({
     },
     [workspaceConfig.operatorName],
   );
+
+  const renderLeadSelectionControl = (lead: Contact) => (
+    <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-xs font-semibold text-white/65 transition hover:bg-white/[0.06]">
+      <input
+        type="checkbox"
+        checked={Boolean(selectedLeadIds[lead.id])}
+        onChange={() => toggleLeadSelection(lead.id)}
+        className="h-4 w-4 accent-[#C7A45A]"
+      />
+      Seleccionar
+    </label>
+  );
+
+  const renderContactStrip = (lead: Contact) => {
+    const whatsappNumber = getLeadWhatsAppNumber(lead);
+    const emailAddress = lead.correo || lead.email || "";
+    return (
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <InfoBlock title="WhatsApp" value={visibleValue(whatsappNumber)} />
+        <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
+        <InfoBlock title="Email" value={visibleValue(emailAddress)} />
+        <InfoBlock title="Web" value={visibleValue(lead.web || lead.audit_domain)} />
+      </div>
+    );
+  };
+
+  const renderChannelControls = (lead: Contact) => {
+    const activeChannel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+    const channels: RecommendedChannel[] = ["whatsapp", "instagram", "email", "llamada", "web", "manual"];
+    return (
+      <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/10 p-3">
+        <p className="luma-kicker">Cambiar canal usado</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {channels.map((channel) => (
+            <button
+              key={channel}
+              type="button"
+              onClick={() => assignLeadChannel(lead, channel)}
+              className={cn(
+                "min-h-9 rounded-lg border px-3 text-xs font-semibold transition",
+                activeChannel === channel
+                  ? "border-[#C7A45A]/40 bg-[#C7A45A]/[0.14] text-[#F5D78C]"
+                  : "border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/[0.07]",
+              )}
+            >
+              {CHANNEL_LABELS[channel]}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderLeadOperationalActions = (lead: Contact, channel = getRecommendedChannel(lead)) => {
+    const message = getChannelMessage(lead, channel);
+    const whatsappNumber = getLeadWhatsAppNumber(lead);
+    const emailAddress = lead.correo || lead.email || "";
+    const webTarget = lead.web || lead.audit_domain || "";
+    const reportUrl = getLeadReportUrl(lead);
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje recomendado")}>
+          Copiar mensaje
+        </ActionButton>
+        <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(whatsappNumber)}>
+          Abrir WhatsApp
+        </ActionButton>
+        <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>
+          Abrir Instagram
+        </ActionButton>
+        <ActionButton icon={Mail} onClick={() => copyText(String(emailAddress), "Email")} disabled={!hasValue(emailAddress)}>
+          Copiar email
+        </ActionButton>
+        <ActionButton icon={ExternalLink} onClick={() => openWebManual(lead)} disabled={!hasValue(webTarget)}>
+          Abrir web
+        </ActionButton>
+        <ActionButton icon={Phone} onClick={() => updateLeadStatus(lead, "call", "llamada")}>
+          Marcar llamada
+        </ActionButton>
+        <ActionButton icon={FileSpreadsheet} variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", channel)}>
+          Marcar propuesta enviada
+        </ActionButton>
+        <ActionButton icon={Clipboard} onClick={() => openProposalPreparation(lead)}>
+          Preparar propuesta
+        </ActionButton>
+        <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)} disabled={sheetsSync.isSaving}>
+          Guardar en Sheets
+        </ActionButton>
+        {hasValue(reportUrl) && (
+          <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")}>
+            Ver Reporte Luma
+          </ActionButton>
+        )}
+      </div>
+    );
+  };
+
+  const renderStatusActions = (lead: Contact, channel = getRecommendedChannel(lead)) => (
+    <div className="flex flex-wrap gap-2">
+      {STATUS_ACTIONS.map((action) => (
+        <ActionButton
+          key={action.status}
+          onClick={() => updateLeadStatus(lead, action.status, channel)}
+          variant={action.status === "proposal_sent" ? "gold" : action.status === "not_interested" ? "danger" : "default"}
+        >
+          {action.label}
+        </ActionButton>
+      ))}
+    </div>
+  );
+
+  const renderSelectionToolbar = (leads: Contact[], label: string) => (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p className="luma-kicker">Seleccion rapida</p>
+          <p className="mt-2 text-sm text-[var(--luma-muted)]">
+            {selectedLeadIdList.length} seleccionados. Vista actual: {label} ({leads.length} visibles).
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <ActionButton icon={CheckCircle2} onClick={() => selectVisibleLeads(leads)} disabled={leads.length === 0}>
+            Seleccionar visible
+          </ActionButton>
+          <ActionButton icon={XCircle} onClick={clearSelection} disabled={selectedLeadIdList.length === 0}>
+            Limpiar seleccion
+          </ActionButton>
+          <ActionButton icon={Flame} variant="gold" onClick={createBatchFromSelection} disabled={selectedLeadIdList.length === 0}>
+            Crear lote
+          </ActionButton>
+          <ActionButton onClick={() => updateSelectedStatus("contacted")} disabled={selectedLeadIdList.length === 0}>
+            Estado contactado
+          </ActionButton>
+          <ActionButton onClick={() => updateSelectedStatus("follow_up")} disabled={selectedLeadIdList.length === 0}>
+            Estado seguimiento
+          </ActionButton>
+          <ActionButton onClick={() => updateSelectedStatus("sin_accion_por_ahora")} disabled={selectedLeadIdList.length === 0}>
+            Sin accion
+          </ActionButton>
+          <ActionButton onClick={() => assignSelectedChannel("whatsapp")} disabled={selectedLeadIdList.length === 0}>
+            Canal WhatsApp
+          </ActionButton>
+          <ActionButton onClick={() => assignSelectedChannel("instagram")} disabled={selectedLeadIdList.length === 0}>
+            Canal Instagram
+          </ActionButton>
+          <ActionButton onClick={() => assignSelectedChannel("email")} disabled={selectedLeadIdList.length === 0}>
+            Canal Email
+          </ActionButton>
+          <ActionButton onClick={() => assignSelectedChannel("manual")} disabled={selectedLeadIdList.length === 0}>
+            Canal manual
+          </ActionButton>
+          <ActionButton icon={Save} variant="gold" onClick={saveSelectedLeadsToSheets} disabled={selectedLeadIdList.length === 0 || sheetsSync.isSaving}>
+            Guardar seleccion
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderBatchSummary = () => {
+    if (!lastBatchSummary) return null;
+    return (
+      <div className="rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.07] p-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="luma-kicker">Resumen del lote desde Sheets</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#F5D78C]">
+              Se crearon {lastBatchSummary.incluidos_lote} leads porque solo esos cumplen canal visible, estado elegible y no contacto reciente.
+            </p>
+          </div>
+          <Badge className="border-[#C7A45A]/30 bg-[#C7A45A]/10 text-[#F5D78C]">Guardado en Sheets</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+          <MiniStat label="Total evaluados" value={lastBatchSummary.total_evaluados} />
+          <MiniStat label="Con WhatsApp" value={lastBatchSummary.con_whatsapp} />
+          <MiniStat label="Con Instagram" value={lastBatchSummary.con_instagram} />
+          <MiniStat label="Estado bloqueante" value={lastBatchSummary.excluidos_estado_bloqueante} />
+          <MiniStat label="Falta canal" value={lastBatchSummary.excluidos_falta_canal} />
+          <MiniStat label="Contacto reciente" value={lastBatchSummary.excluidos_contacto_reciente} />
+          <MiniStat label="Incluidos" value={lastBatchSummary.incluidos_lote} />
+        </div>
+      </div>
+    );
+  };
 
   const renderLeadCard = (lead: Contact, compact = false) => {
     const channel = getRecommendedChannel(lead);
@@ -1811,6 +2277,7 @@ export function LumaOutreachConsole({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              {renderLeadSelectionControl(lead)}
               <LeadChannelBadge channel={channel} />
               <LeadStatusBadge status={lead.status} />
               <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {sourceLabel}</Badge>
@@ -1840,40 +2307,11 @@ export function LumaOutreachConsole({
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <ActionButton icon={Copy} onClick={() => copyText(whatsappNumber, "WhatsApp")} disabled={!hasValue(whatsappNumber)}>
-              Copiar WhatsApp
-            </ActionButton>
-            <ActionButton icon={Copy} onClick={() => copyText(getChannelMessage(lead, channel), "Mensaje recomendado")}>
-              Copiar mensaje
-            </ActionButton>
-            <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(whatsappNumber)}>
-              WhatsApp manual
-            </ActionButton>
-            <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>
-              Abrir Instagram
-            </ActionButton>
-            <ActionButton
-              icon={Mail}
-              onClick={() => copyText(String(emailAddress), "Email")}
-              disabled={!hasValue(emailAddress)}
-            >
-              Copiar email
-            </ActionButton>
-            <ActionButton icon={Copy} onClick={() => copyText(String(lead.linkedin), "LinkedIn")} disabled={!hasValue(lead.linkedin)}>
-              Copiar LinkedIn
-            </ActionButton>
-            <ActionButton icon={ExternalLink} onClick={() => openWebManual(lead)} disabled={!hasValue(webTarget)}>
-              Abrir web
-            </ActionButton>
-            <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")} disabled={!hasValue(reportUrl)}>
-              Ver Reporte Luma
-            </ActionButton>
-            <ActionButton icon={Clipboard} onClick={() => copyContactData(lead)}>
-              Copiar todos los datos
-            </ActionButton>
-          </div>
+          {renderLeadOperationalActions(lead, channel)}
         </div>
+
+        {renderContactStrip(lead)}
+        {renderChannelControls(lead)}
 
         {!compact && (
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1922,16 +2360,9 @@ export function LumaOutreachConsole({
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {STATUS_ACTIONS.map((action) => (
-            <ActionButton
-              key={action.status}
-              onClick={() => updateLeadStatus(lead, action.status, channel)}
-              variant={action.status === "proposal_sent" ? "gold" : action.status === "not_interested" ? "danger" : "default"}
-            >
-              {action.label}
-            </ActionButton>
-          ))}
+        <div className="mt-5">
+          <p className="luma-kicker mb-3">Cambiar estado</p>
+          {renderStatusActions(lead, channel)}
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_280px]">
@@ -1956,13 +2387,16 @@ export function LumaOutreachConsole({
     const channel = getRecommendedChannel(lead);
     const message = getChannelMessage(lead, channel);
     const whatsappNumber = getLeadWhatsAppNumber(lead);
+    const emailAddress = lead.correo || lead.email || "";
     const reportUrl = getLeadReportUrl(lead);
     return (
-      <article key={lead.id} className="luma-lead-card p-4">
-        <div className="grid gap-3 xl:grid-cols-[1.2fr_0.75fr_0.7fr_1.4fr_auto] xl:items-center">
+      <article key={lead.id} className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
+        <div className="grid gap-3 xl:grid-cols-[1.25fr_0.9fr_0.85fr_1.35fr_auto] xl:items-center">
           <div className="min-w-0">
+            <div className="mb-2">{renderLeadSelectionControl(lead)}</div>
             <p className="truncate text-sm font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</p>
             <p className="mt-1 truncate text-xs text-[var(--luma-muted)]">{getLeadPersonName(lead)}</p>
+            <p className="mt-1 truncate text-xs text-white/45">WA {visibleValue(whatsappNumber)} · {visibleValue(emailAddress)}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="border-white/10 bg-white/[0.04] text-white/60">
@@ -1977,18 +2411,86 @@ export function LumaOutreachConsole({
             <Badge className="border-white/10 bg-white/[0.04] text-white/60">{getLeadSourceLabel(lead)}</Badge>
             {!hasValue(lead.reporte_luma) && <Badge className="border-amber-300/20 bg-amber-300/10 text-amber-100">Reporte pendiente</Badge>}
           </div>
-          <LeadChannelBadge channel={channel} />
+          <div className="flex flex-wrap gap-2">
+            <LeadChannelBadge channel={channel} />
+            <LeadStatusBadge status={lead.status} />
+          </div>
           <p className="line-clamp-2 text-xs leading-relaxed text-[var(--luma-muted)]">{message}</p>
           <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
             <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje safe")}>Copiar</ActionButton>
             <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(whatsappNumber)}>WhatsApp</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>Instagram</ActionButton>
+            <ActionButton icon={Mail} onClick={() => copyText(emailAddress, "Email")} disabled={!hasValue(emailAddress)}>Email</ActionButton>
             <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")} disabled={!hasValue(reportUrl)}>Reporte</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "contacted", channel)}>Contactado</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Respondio</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "follow_up", channel)}>Seguimiento</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", channel)}>Sin accion</ActionButton>
+            <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Sheets</ActionButton>
           </div>
         </div>
+      </article>
+    );
+  };
+
+  const renderProspectOperationalRow = (lead: Contact) => {
+    const channel = getRecommendedChannel(lead);
+    const expanded = Boolean(expandedLeadIds[lead.id]);
+    const nextStep = lead.proximo_paso || lead.nextStep || "Sin proximo paso.";
+    return (
+      <article key={lead.id} className="border-b border-white/[0.06] p-4 last:border-b-0">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.9fr_1.4fr] xl:items-start">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {renderLeadSelectionControl(lead)}
+              <LeadChannelBadge channel={channel} />
+              <LeadStatusBadge status={lead.status} />
+              <Badge className="border-white/10 bg-white/[0.04] text-white/60">{getNicheDefinition(resolveLeadNiche(lead)).shortLabel}</Badge>
+            </div>
+            <p className="mt-3 truncate text-base font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</p>
+            <p className="mt-1 truncate text-sm text-[var(--luma-muted)]">{getLeadPersonName(lead)}</p>
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-white/45">{nextStep}</p>
+          </div>
+
+          <div className="grid gap-2 text-xs text-[var(--luma-muted)] sm:grid-cols-2 xl:grid-cols-1">
+            <span>WhatsApp: {visibleValue(getLeadWhatsAppNumber(lead))}</span>
+            <span>Instagram: {visibleValue(lead.instagram)}</span>
+            <span>Email: {visibleValue(lead.correo || lead.email)}</span>
+            <span>Web: {visibleValue(lead.web || lead.audit_domain)}</span>
+          </div>
+
+          <div className="space-y-3">
+            {renderLeadOperationalActions(lead, channel)}
+            <div className="flex flex-wrap gap-2">
+              <ActionButton onClick={() => toggleLeadExpanded(lead.id)}>
+                {expanded ? "Ocultar datos" : "Ver mas"}
+              </ActionButton>
+              <ActionButton icon={Clipboard} onClick={() => copyContactData(lead)}>
+                Copiar todos los datos
+              </ActionButton>
+            </div>
+          </div>
+        </div>
+
+        {expanded && (
+          <div className="mt-4 space-y-4 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+            {renderChannelControls(lead)}
+            <div>
+              <p className="luma-kicker mb-3">Cambiar estado</p>
+              {renderStatusActions(lead, channel)}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <InfoBlock title="Telefono" value={visibleValue(getLeadPhoneNumber(lead))} />
+              <InfoBlock title="LinkedIn" value={visibleValue(lead.linkedin)} />
+              <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
+              <InfoBlock title="Demo asociada" value={`${getLeadDemo(lead).label}\n${getLeadDemo(lead).url}`} />
+              <InfoBlock title="Senal comercial" value={getLeadSignal(lead)} />
+              <InfoBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} />
+              <InfoBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin notas."} />
+              <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
+            </div>
+          </div>
+        )}
       </article>
     );
   };
@@ -2075,7 +2577,7 @@ export function LumaOutreachConsole({
     <section className="space-y-5">
       <SectionHeader
         kicker="Modelo multinicho"
-        title="Ocho frentes comerciales, una consola local"
+        title={`${commercialFrontCount} frentes comerciales, una consola local`}
         body="Cada nicho tiene oferta, ticket y pipeline propio. Si aun no tiene leads, queda listo para importar su CSV normalizado."
       />
       <div className="grid gap-4 xl:grid-cols-2">
@@ -2235,7 +2737,18 @@ export function LumaOutreachConsole({
             Modo compacto
           </SegmentButton>
         </div>
+        <div className="relative mt-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/[0.35]" size={16} />
+          <input
+            value={todaySearch}
+            onChange={(event) => setTodaySearch(event.target.value)}
+            placeholder="Buscar en Lote de Hoy: Eddy Veras, negocio, persona, telefono, WhatsApp, Instagram, email, nicho o estado..."
+            className="luma-input pl-10"
+          />
+        </div>
       </div>
+      {renderBatchSummary()}
+      {renderSelectionToolbar(visibleTodayBatch, "Lote de Hoy")}
       {todayBatch.length === 0 ? (
         <EmptyState
           icon={Flame}
@@ -2244,7 +2757,11 @@ export function LumaOutreachConsole({
         />
       ) : (
         <div className="space-y-3">
-          {visibleTodayBatch.map((lead) => (todayCompact ? renderCompactLead(lead) : renderLeadCard(lead)))}
+          {visibleTodayBatch.length === 0 ? (
+            <EmptyState icon={Search} title="No hay resultados en este lote." body="Cambia la busqueda local o limpia filtros para continuar." />
+          ) : (
+            visibleTodayBatch.map((lead) => (todayCompact ? renderCompactLead(lead) : renderLeadCard(lead)))
+          )}
         </div>
       )}
     </section>
@@ -2255,7 +2772,7 @@ export function LumaOutreachConsole({
       <SectionHeader
         kicker="Base completa"
         title="Prospectos"
-        body="Vista compacta para buscar, filtrar y ordenar. La vista principal de trabajo sigue siendo el lote en cards."
+        body="Base operativa para buscar, contactar, cambiar estado, preparar propuesta y guardar sin salir de Prospectos."
       />
 
       <div className="luma-panel p-5">
@@ -2378,48 +2895,18 @@ export function LumaOutreachConsole({
           </ActionButton>
         </div>
       </div>
+      {renderSelectionToolbar(visibleProspectRows, "Prospectos")}
 
       <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]">
-        <div className="hidden grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] gap-4 border-b border-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.35] md:grid">
+        <div className="hidden grid-cols-[1.15fr_0.9fr_1.4fr] gap-4 border-b border-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.35] xl:grid">
           <span>Prospecto</span>
-          <span>Nicho</span>
-          <span>Canal</span>
-          <span>Estado</span>
-          <span>Proximo paso</span>
+          <span>Contacto visible</span>
+          <span>Acciones operativas</span>
         </div>
         {filteredLeads.length === 0 ? (
           <EmptyState title="No hay resultados con estos filtros." body="Limpia filtros o cambia busqueda." />
         ) : (
-          visibleProspectRows.map((lead) => (
-            <div
-              key={lead.id}
-              className="grid gap-3 border-b border-white/[0.06] px-4 py-4 text-sm last:border-b-0 md:grid-cols-[1.3fr_0.9fr_0.8fr_0.8fr_0.9fr] md:gap-4"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</p>
-                <p className="mt-1 truncate text-xs text-[var(--luma-muted)]">{getLeadPersonName(lead)}</p>
-                {isInstagramOnlyLead(lead) && (
-                  <Badge className="mt-2 border-fuchsia-300/20 bg-fuchsia-300/10 text-fuchsia-100">Instagram-only</Badge>
-                )}
-              </div>
-              <div>
-                <p className="luma-kicker md:hidden">Nicho</p>
-                <span className="text-[var(--luma-muted)]">{getNicheDefinition(resolveLeadNiche(lead)).shortLabel}</span>
-              </div>
-              <div>
-                <p className="luma-kicker mb-2 md:hidden">Canal</p>
-                <LeadChannelBadge channel={getRecommendedChannel(lead)} />
-              </div>
-              <div>
-                <p className="luma-kicker mb-2 md:hidden">Estado</p>
-                <LeadStatusBadge status={lead.status} />
-              </div>
-              <div>
-                <p className="luma-kicker md:hidden">Proximo paso</p>
-                <span className="line-clamp-2 text-[var(--luma-muted)]">{lead.proximo_paso || lead.nextStep || "Sin proximo paso."}</span>
-              </div>
-            </div>
-          ))
+          visibleProspectRows.map((lead) => renderProspectOperationalRow(lead))
         )}
       </div>
     </section>
@@ -2428,6 +2915,7 @@ export function LumaOutreachConsole({
   const renderFollowup = () => {
     const leads = contacts
       .filter((lead) => FOLLOW_UP_STATUSES.has(lead.status))
+      .filter((lead) => leadMatchesQuery(lead, followupSearch))
       .sort((a, b) => String(a.followup_due_date || a.fecha_seguimiento || "9999").localeCompare(String(b.followup_due_date || b.fecha_seguimiento || "9999")));
     return (
       <section className="space-y-5">
@@ -2436,6 +2924,18 @@ export function LumaOutreachConsole({
           title="Seguimiento"
           body="Donde no se pierden conversaciones: proximo paso, fecha, canal, intentos y notas."
         />
+        <div className="luma-panel p-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/[0.35]" size={16} />
+            <input
+              value={followupSearch}
+              onChange={(event) => setFollowupSearch(event.target.value)}
+              placeholder="Buscar seguimiento por nombre, negocio, estado, proximo paso, canal, fecha, propuesta o notas..."
+              className="luma-input pl-10"
+            />
+          </div>
+        </div>
+        {renderSelectionToolbar(leads, "Seguimiento")}
         {leads.length === 0 ? (
           <EmptyState icon={RefreshCw} title="Aun no hay leads en seguimiento." body="Marca contactados, respuestas o interesados desde el lote de hoy." />
         ) : (
@@ -2446,39 +2946,53 @@ export function LumaOutreachConsole({
               const dueDate = lead.followup_due_date || lead.fecha_seguimiento || "";
               const lastNote = lead.notas || lead.notes || "Sin nota registrada.";
               const summary = lead.conversation_summary || "Sin resumen registrado.";
+              const reportUrl = getLeadReportUrl(lead);
+              const demo = getLeadDemo(lead);
 
               return (
                 <article key={lead.id} className="luma-lead-card">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap gap-2">
+                        {renderLeadSelectionControl(lead)}
                         <LeadStatusBadge status={lead.status} />
                         <LeadChannelBadge channel={channel} />
+                        <Badge className="border-white/10 bg-white/[0.04] text-white/60">Origen: {getLeadSourceLabel(lead)}</Badge>
                       </div>
                       <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
                       <p className="mt-1 text-sm text-[var(--luma-muted)]">
                         {getLeadPersonName(lead)} - {getNicheDefinition(resolveLeadNiche(lead)).shortLabel}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>WhatsApp</ActionButton>
-                      <ActionButton icon={Phone} onClick={() => openPhoneManual(lead)} disabled={!hasValue(getLeadPhoneNumber(lead))}>Llamada</ActionButton>
-                      <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>Instagram</ActionButton>
-                      <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje recomendado")}>Copiar mensaje</ActionButton>
-                    </div>
+                    {renderLeadOperationalActions(lead, channel)}
                   </div>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <InfoBlock title="Nombre del negocio" value={getLeadBusinessName(lead)} />
+                    <InfoBlock title="Persona" value={getLeadPersonName(lead)} />
+                    <InfoBlock title="WhatsApp" value={visibleValue(getLeadWhatsAppNumber(lead))} />
+                    <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
+                    <InfoBlock title="Email" value={visibleValue(lead.correo || lead.email)} />
+                    <InfoBlock title="Web" value={visibleValue(lead.web || lead.audit_domain)} />
+                    <InfoBlock title="Estado actual" value={statusLabel(lead.status)} />
                     <InfoBlock title="Canal ultimo usado" value={CHANNEL_LABELS[(lead.last_channel || lead.ultimo_canal_usado || channel) as RecommendedChannel] || String(lead.last_channel || lead.ultimo_canal_usado || "Sin canal")} />
                     <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir proximo movimiento."} />
                     <InfoBlock title="Fecha seguimiento" value={formatDate(dueDate)} />
-                    <InfoBlock title="Intentos realizados" value={String(lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0)} />
-                    <InfoBlock title="Estado" value={statusLabel(lead.status)} />
-                    <InfoBlock title="Ultima nota" value={lastNote} />
-                    <InfoBlock title="Resumen de conversacion" value={summary} />
-                    <InfoBlock title="Ultima interaccion" value={formatDate(lead.last_interaction_date || lead.fecha_contacto || lead.lastContactDate)} />
+                    <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
+                    <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
                     <InfoBlock title="Mensaje recomendado" value={message} />
+                    <InfoBlock title="Notas" value={`${lastNote}\n\nResumen: ${summary}`} />
+                    <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
+                    <InfoBlock title="Intentos / ultima interaccion" value={`${lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0}\n${formatDate(lead.last_interaction_date || lead.fecha_contacto || lead.lastContactDate)}`} />
                   </div>
+
+                  {hasValue(reportUrl) && (
+                    <div className="mt-4">
+                      <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")}>
+                        Ver Reporte Luma
+                      </ActionButton>
+                    </div>
+                  )}
 
                   <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr]">
                     <input
@@ -2496,10 +3010,16 @@ export function LumaOutreachConsole({
                   </div>
 
                   <div className="mt-5 flex flex-wrap gap-2">
+                    <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje recomendado")}>Copiar mensaje</ActionButton>
+                    <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>Abrir WhatsApp</ActionButton>
+                    <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
+                    <ActionButton icon={Mail} onClick={() => copyText(String(lead.correo || lead.email || ""), "Email")} disabled={!hasValue(lead.correo || lead.email)}>Copiar email</ActionButton>
+                    <ActionButton icon={ExternalLink} onClick={() => openWebManual(lead)} disabled={!hasValue(lead.web || lead.audit_domain)}>Abrir web</ActionButton>
                     <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Marcar respondio</ActionButton>
                     <ActionButton onClick={() => updateLeadStatus(lead, "call", "llamada")}>Marcar llamada</ActionButton>
                     <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", channel)}>Marcar propuesta enviada</ActionButton>
                     <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", channel)}>Sin accion por ahora</ActionButton>
+                    <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Guardar en Sheets</ActionButton>
                   </div>
                 </article>
               );
@@ -2559,7 +3079,7 @@ export function LumaOutreachConsole({
   };
 
   const renderProposals = () => {
-    const leads = contacts.filter((lead) => PROPOSAL_STATUSES.has(lead.status));
+    const leads = contacts.filter((lead) => PROPOSAL_STATUSES.has(lead.status)).filter((lead) => leadMatchesQuery(lead, proposalSearch));
     return (
       <section className="space-y-5">
         <SectionHeader
@@ -2567,6 +3087,17 @@ export function LumaOutreachConsole({
           title="Propuestas"
           body="Propuestas de implementacion Luma Premium: oferta, ticket, siguiente paso y material comercial. No es una seccion para presentar propiedades."
         />
+        <div className="luma-panel p-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/[0.35]" size={16} />
+            <input
+              value={proposalSearch}
+              onChange={(event) => setProposalSearch(event.target.value)}
+              placeholder="Buscar propuestas por nombre, negocio, oferta, ticket, estado, canal, fecha, link o notas..."
+              className="luma-input pl-10"
+            />
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {PRODUCT_CATALOG.map((product) => (
             <div key={product.key} className="luma-panel p-4">
@@ -2582,6 +3113,7 @@ export function LumaOutreachConsole({
         <div className="rounded-lg border border-dashed border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4 text-sm text-[#F5D78C]">
           Links de propuesta, material comercial o demo se guardan por prospecto en localStorage.
         </div>
+        {renderSelectionToolbar(leads, "Propuestas")}
         {leads.length === 0 ? (
           <EmptyState icon={FileSpreadsheet} title="No hay propuestas activas." body="Cuando una llamada avance, marca propuesta enviada y deja el proximo paso." />
         ) : (
@@ -2590,12 +3122,15 @@ export function LumaOutreachConsole({
               const niche = getNicheDefinition(resolveLeadNiche(lead));
               const ticket = getLeadTicket(lead);
               const demo = getLeadDemo(lead);
+              const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
               const summary = [
                 `Prospecto: ${getLeadBusinessName(lead)}`,
                 `Nicho: ${niche.shortLabel}`,
                 `Oferta recomendada: ${getLeadOffer(lead)}`,
                 `Ticket sugerido: ${ticket}`,
                 `Demo asociada: ${demo.label} - ${demo.url}`,
+                `Canal usado: ${CHANNEL_LABELS[channel] || channel}`,
+                `Fecha: ${formatDate(lead.fecha_propuesta)}`,
                 `Estado: ${statusLabel(lead.status)}`,
                 `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
                 `Nota comercial: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
@@ -2609,9 +3144,11 @@ export function LumaOutreachConsole({
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap gap-2">
+                        {renderLeadSelectionControl(lead)}
                         <LeadStatusBadge status={lead.status} />
                         <Badge className="border-[#C7A45A]/25 bg-[#C7A45A]/10 text-[#F5D78C]">{ticket}</Badge>
                         <Badge className="border-white/10 bg-white/[0.04] text-white/60">{demo.label}</Badge>
+                        <LeadChannelBadge channel={getRecommendedChannel(lead)} />
                       </div>
                       <h3 className="mt-4 text-xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
                       <p className="mt-1 text-sm text-[var(--luma-muted)]">{getLeadPersonName(lead)} - {niche.shortLabel}</p>
@@ -2619,12 +3156,14 @@ export function LumaOutreachConsole({
                     <div className="flex flex-wrap gap-2">
                       <ActionButton icon={Copy} onClick={() => copyText(summary, "Resumen de propuesta")}>Copiar resumen de propuesta</ActionButton>
                       <ActionButton icon={ExternalLink} onClick={() => window.open(demo.url, "_blank", "noopener,noreferrer")}>Abrir demo</ActionButton>
+                      <ActionButton icon={Clipboard} variant="gold" onClick={() => openProposalPreparation(lead)}>Preparar propuesta</ActionButton>
                       <ActionButton onClick={() => saveProposalLink(lead, "propuesta_link", "link de propuesta")}>Guardar link de propuesta</ActionButton>
                       <ActionButton onClick={() => saveProposalLink(lead, "material_link", "link de material o demo")}>Guardar link de material/demo</ActionButton>
                       <ActionButton variant="gold" onClick={() => updateLeadStatus(lead, "proposal_sent", getRecommendedChannel(lead))}>Marcar enviada</ActionButton>
                       <ActionButton onClick={() => updateLeadStatus(lead, "negotiating", getRecommendedChannel(lead))}>Marcar negociando</ActionButton>
                       <ActionButton onClick={() => updateLeadStatus(lead, "closed", getRecommendedChannel(lead))}>Marcar cerrado</ActionButton>
                       <ActionButton variant="danger" onClick={() => updateLeadStatus(lead, "lost", getRecommendedChannel(lead))}>Marcar perdido</ActionButton>
+                      <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Guardar en Sheets</ActionButton>
                     </div>
                   </div>
 
@@ -2634,13 +3173,14 @@ export function LumaOutreachConsole({
                     <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
                     <InfoBlock title="Ticket sugerido" value={ticket} />
                     <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
-                    <InfoBlock title="Estado de propuesta" value={statusLabel(lead.status)} />
+                    <InfoBlock title="Canal usado" value={CHANNEL_LABELS[channel] || String(channel)} />
+                    <InfoBlock title="Fecha" value={formatDate(lead.fecha_propuesta)} />
+                    <InfoBlock title="Estado actual" value={statusLabel(lead.status)} />
                     <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
-                    <InfoBlock title="Nota comercial" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
                     <InfoBlock title="Link propuesta" value={visibleValue(lead.propuesta_link)} />
                     <InfoBlock title="Link material o demo" value={visibleValue(lead.material_link || demo.url)} />
+                    <InfoBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
                     <InfoBlock title="Monto estimado" value={visibleValue(lead.monto_estimado)} />
-                    <InfoBlock title="Fecha propuesta" value={formatDate(lead.fecha_propuesta)} />
                     <InfoBlock title="Decision status" value={visibleValue(lead.decision_status)} />
                   </div>
 
@@ -2935,6 +3475,70 @@ export function LumaOutreachConsole({
     </section>
   );
 
+  const renderProposalPreparationModal = () => {
+    const lead = contacts.find((item) => item.id === proposalDraftLeadId);
+    if (!lead) return null;
+    const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+    const demo = getLeadDemo(lead);
+    const message = getChannelMessage(lead, channel);
+
+    return (
+      <div className="fixed inset-0 z-[70] flex items-end bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+        <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-white/[0.1] bg-[var(--luma-surface)] p-5 shadow-2xl">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="luma-kicker">Preparar propuesta</p>
+              <h3 className="mt-2 text-2xl font-semibold text-[var(--luma-ivory)]">{getLeadBusinessName(lead)}</h3>
+              <p className="mt-1 text-sm text-[var(--luma-muted)]">
+                No se envia automaticamente. Marcos copia, abre el canal y decide manualmente.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cerrar preparar propuesta"
+              onClick={closeProposalPreparation}
+              className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70"
+            >
+              <X size={17} />
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <InfoBlock title="Oferta" value={getLeadOffer(lead)} />
+            <InfoBlock title="Ticket" value={getLeadTicket(lead)} />
+            <InfoBlock title="Demo" value={`${demo.label}\n${demo.url}`} />
+            <InfoBlock title="Canal recomendado" value={CHANNEL_LABELS[channel] || String(channel)} />
+            <InfoBlock title="Mensaje sugerido" value={message} />
+            <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <label className="block">
+              <span className="luma-kicker">Link de propuesta</span>
+              <input
+                value={proposalDraftLink}
+                onChange={(event) => setProposalDraftLink(event.target.value)}
+                placeholder="Pega aqui el link de propuesta cuando exista"
+                className="luma-input mt-2"
+              />
+            </label>
+            <ActionButton icon={Save} variant="gold" onClick={() => saveProposalPreparation(lead)} disabled={sheetsSync.isSaving}>
+              Guardar en Sheets
+            </ActionButton>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <ActionButton icon={Copy} onClick={() => copyText(message, "Mensaje de propuesta")}>Copiar mensaje</ActionButton>
+            <ActionButton icon={MessageCircle} onClick={() => openWhatsAppManual(lead)} disabled={!hasValue(getLeadWhatsAppNumber(lead))}>Abrir WhatsApp</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => openInstagramManual(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
+            <ActionButton icon={Mail} onClick={() => openEmailManual(lead)} disabled={!hasValue(lead.correo || lead.email)}>Email manual</ActionButton>
+            <ActionButton icon={ExternalLink} onClick={() => window.open(demo.url, "_blank", "noopener,noreferrer")}>Abrir demo</ActionButton>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderActiveView = () => {
     switch (activeView) {
       case "command":
@@ -3167,7 +3771,7 @@ export function LumaOutreachConsole({
       {toast && (
         <div
           className={cn(
-            "fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border px-4 py-3 text-sm shadow-2xl",
+            "fixed bottom-5 right-5 z-50 max-w-lg rounded-lg border px-5 py-4 text-base font-semibold leading-relaxed shadow-2xl",
             toast.type === "success"
               ? "border-emerald-300/20 bg-emerald-950 text-emerald-100"
               : toast.type === "error"
@@ -3178,6 +3782,7 @@ export function LumaOutreachConsole({
           {toast.message}
         </div>
       )}
+      {renderProposalPreparationModal()}
     </main>
   );
 }

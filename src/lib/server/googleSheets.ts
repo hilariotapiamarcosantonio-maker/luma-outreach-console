@@ -8,6 +8,7 @@ import {
   getLeadDemo,
   getLeadOffer,
   getLeadTicket,
+  getLeadWhatsAppNumber,
   getRecommendedChannel,
   hasValue,
   normalizeText,
@@ -18,6 +19,16 @@ import type { Contact, ContactStatus, NicheKey, RecommendedChannel } from "@/typ
 type SheetValue = string | number | boolean;
 type SheetRow = SheetValue[];
 type SheetObject = Record<string, string>;
+type BatchSummary = {
+  total_evaluados: number;
+  con_whatsapp: number;
+  con_instagram: number;
+  excluidos_estado_bloqueante: number;
+  excluidos_falta_canal: number;
+  excluidos_contacto_reciente: number;
+  excluidos_lote_activo: number;
+  incluidos_lote: number;
+};
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const DEFAULT_PROSPECTOS_TAB = "Prospectos";
@@ -52,20 +63,34 @@ const MANUAL_PROTECTED_HEADERS = new Set([
 
 const OUTREACH_WRITE_HEADERS = new Set([
   "Estado",
+  "estado",
   "Proximo paso",
-  "Próximo paso",
+  "Pr\u00f3ximo paso",
+  "proximo_paso",
   "Fecha de contacto",
+  "fecha_contacto",
   "Fecha de seguimiento",
+  "fecha_seguimiento",
   "Notas",
+  "notas",
   "_oferta_recomendada",
   "_mensaje_instagram",
   "_asunto_email",
   "_mensaje_email",
   "_tipo_respuesta",
   "_ultimo_canal_usado",
+  "ultimo_canal_usado",
   "_cantidad_contactos",
+  "cantidad_contactos",
   "_ts_actualizacion",
+  "updated_at",
   "_id",
+  "propuesta_link",
+  "material_link",
+  "material_demo_link",
+  "monto_estimado",
+  "fecha_propuesta",
+  "decision_status",
 ]);
 
 const ADVANCED_STATUSES = new Set([
@@ -107,55 +132,71 @@ const BLOCKED_BATCH_STATUSES = new Set([
   "sin_accion_por_ahora",
 ]);
 
-const STATUS_TO_SHEET: Partial<Record<ContactStatus, string>> = {
+const STATUS_TO_SHEET: Record<string, string> = {
   pending: "Pendiente",
+  pendiente: "Pendiente",
   listo_contacto: "Pendiente",
+  failed: "Pendiente",
   contacted: "Contactado",
-  replied: "Respondió",
-  respondio: "Respondió",
+  contactado: "Contactado",
+  replied: "Respondi\u00f3",
+  respondio: "Respondi\u00f3",
+  "respondi\u00f3": "Respondi\u00f3",
   interested: "Interesado",
+  interesado: "Interesado",
   follow_up: "Seguimiento",
+  seguimiento: "Seguimiento",
   call: "Llamada",
   appointment: "Llamada",
+  llamada: "Llamada",
   proposal_sent: "Propuesta enviada",
   propuesta_enviada: "Propuesta enviada",
   negotiating: "Negociando",
+  negociando: "Negociando",
   closed: "Cerrado",
+  cerrado: "Cerrado",
   lost: "Perdido",
   not_interested: "No interesado",
+  no_interesado: "No interesado",
   discarded: "Descartado",
+  descartado: "Descartado",
   referred: "Referido",
-  sin_accion_por_ahora: "Sin acción por ahora",
-  needs_review: "Revisión",
+  referido: "Referido",
+  sin_accion_por_ahora: "Sin acci\u00f3n por ahora",
+  needs_review: "Revisi\u00f3n",
   sin_canal: "Sin canal",
-  failed: "Pendiente",
 };
 
 const FIELD_TO_HEADERS: Record<string, string[]> = {
-  status: ["Estado"],
-  estado: ["Estado"],
-  proximo_paso: ["Próximo paso", "Proximo paso"],
-  nextStep: ["Próximo paso", "Proximo paso"],
-  fecha_contacto: ["Fecha de contacto"],
-  lastContactDate: ["Fecha de contacto"],
-  fecha_seguimiento: ["Fecha de seguimiento"],
-  followup_due_date: ["Fecha de seguimiento"],
-  notas: ["Notas"],
-  notes: ["Notas"],
-  conversation_summary: ["Notas"],
+  status: ["Estado", "estado"],
+  estado: ["Estado", "estado"],
+  proximo_paso: ["Pr\u00f3ximo paso", "Proximo paso", "proximo_paso"],
+  nextStep: ["Pr\u00f3ximo paso", "Proximo paso", "proximo_paso"],
+  fecha_contacto: ["Fecha de contacto", "fecha_contacto"],
+  lastContactDate: ["Fecha de contacto", "fecha_contacto"],
+  fecha_seguimiento: ["Fecha de seguimiento", "fecha_seguimiento"],
+  followup_due_date: ["Fecha de seguimiento", "fecha_seguimiento"],
+  notas: ["Notas", "notas"],
+  notes: ["Notas", "notas"],
+  conversation_summary: ["Notas", "notas"],
   oferta_recomendada: ["_oferta_recomendada"],
   mensaje_instagram: ["_mensaje_instagram"],
   asunto_email: ["_asunto_email"],
   mensaje_email: ["_mensaje_email"],
   tipo_respuesta: ["_tipo_respuesta"],
-  ultimo_canal_usado: ["_ultimo_canal_usado"],
-  last_channel: ["_ultimo_canal_usado"],
-  cantidad_contactos: ["_cantidad_contactos"],
-  sentCount: ["_cantidad_contactos"],
-  fecha_ultima_actualizacion: ["_ts_actualizacion"],
-  _ts_actualizacion: ["_ts_actualizacion"],
+  ultimo_canal_usado: ["_ultimo_canal_usado", "ultimo_canal_usado"],
+  last_channel: ["_ultimo_canal_usado", "ultimo_canal_usado"],
+  cantidad_contactos: ["_cantidad_contactos", "cantidad_contactos"],
+  sentCount: ["_cantidad_contactos", "cantidad_contactos"],
+  fecha_ultima_actualizacion: ["_ts_actualizacion", "updated_at"],
+  _ts_actualizacion: ["_ts_actualizacion", "updated_at"],
   id: ["_id"],
   _id: ["_id"],
+  propuesta_link: ["propuesta_link"],
+  material_link: ["material_link", "material_demo_link"],
+  monto_estimado: ["monto_estimado"],
+  fecha_propuesta: ["fecha_propuesta"],
+  decision_status: ["decision_status"],
 };
 
 const HEADER_SCORE_WORDS = [
@@ -381,7 +422,8 @@ function isBlockedBatchStatus(value: unknown) {
 
 function sheetStatus(value: unknown) {
   const raw = String(value ?? "");
-  return STATUS_TO_SHEET[raw as ContactStatus] || raw;
+  const key = normalizeText(raw).replace(/[\s-]+/g, "_");
+  return STATUS_TO_SHEET[key] || STATUS_TO_SHEET[raw] || raw;
 }
 
 function todayDate() {
@@ -552,11 +594,85 @@ function isPastOrToday(value?: string) {
   return date.getTime() <= today.getTime();
 }
 
-function isEligibleForBatch(lead: Contact, activeIds: Set<string>, type: string, channel?: RecommendedChannel, niche?: NicheKey | "all") {
-  const key = String(lead.id || lead.row_number || "");
+function isInBatchScope(lead: Contact, niche?: NicheKey | "all") {
+  return !niche || niche === "all" || resolveLeadNiche(lead) === niche;
+}
+
+function hasRequestedBatchChannel(lead: Contact, type: string, channel?: RecommendedChannel) {
+  if (type === "followup_overdue") return true;
+  const target = channel || (["whatsapp", "instagram", "email"].includes(type) ? (type as RecommendedChannel) : undefined);
+  if (target === "whatsapp") return getRecommendedChannel(lead) === "whatsapp" && hasValue(getLeadWhatsAppNumber(lead));
+  if (target === "instagram") return hasValue(lead.instagram);
+  if (target === "email") return hasValue(lead.correo || lead.email);
+  if (target === "linkedin") return hasValue(lead.linkedin);
+  return getRecommendedChannel(lead) !== "sin_canal";
+}
+
+function getBatchLeadKey(lead: Contact) {
+  return String(lead.id || lead.row_number || "");
+}
+
+function isAlreadyInActiveBatch(lead: Contact, activeIds: Set<string>) {
+  const key = getBatchLeadKey(lead);
   const rowKey = lead.row_number ? String(lead.row_number) : "";
-  if (activeIds.has(key) || (rowKey && activeIds.has(rowKey))) return false;
-  const leadChannel = getRecommendedChannel(lead);
+  return activeIds.has(key) || (rowKey ? activeIds.has(rowKey) : false);
+}
+
+function buildBatchSummary(
+  contacts: Contact[],
+  activeIds: Set<string>,
+  type: string,
+  channel: RecommendedChannel | undefined,
+  niche: NicheKey | "all" | undefined,
+  included: Contact[],
+): BatchSummary {
+  const includedIds = new Set(included.map((lead) => getBatchLeadKey(lead)));
+  const summary: BatchSummary = {
+    total_evaluados: 0,
+    con_whatsapp: 0,
+    con_instagram: 0,
+    excluidos_estado_bloqueante: 0,
+    excluidos_falta_canal: 0,
+    excluidos_contacto_reciente: 0,
+    excluidos_lote_activo: 0,
+    incluidos_lote: included.length,
+  };
+
+  contacts.forEach((lead) => {
+    if (!isInBatchScope(lead, niche)) return;
+    summary.total_evaluados += 1;
+    if (hasValue(getLeadWhatsAppNumber(lead))) summary.con_whatsapp += 1;
+    if (hasValue(lead.instagram)) summary.con_instagram += 1;
+
+    if (includedIds.has(getBatchLeadKey(lead))) return;
+    if (isAlreadyInActiveBatch(lead, activeIds)) {
+      summary.excluidos_lote_activo += 1;
+      return;
+    }
+    if (type === "followup_overdue") {
+      const due = lead.followup_due_date || lead.fecha_seguimiento;
+      if (!isPastOrToday(due)) summary.excluidos_falta_canal += 1;
+      else if (["not_interested", "closed", "discarded", "lost"].includes(lead.status)) summary.excluidos_estado_bloqueante += 1;
+      return;
+    }
+    if (isBlockedBatchStatus(lead.estado || lead.status)) {
+      summary.excluidos_estado_bloqueante += 1;
+      return;
+    }
+    if (isRecentlyContacted(lead)) {
+      summary.excluidos_contacto_reciente += 1;
+      return;
+    }
+    if (!hasRequestedBatchChannel(lead, type, channel)) {
+      summary.excluidos_falta_canal += 1;
+    }
+  });
+
+  return summary;
+}
+
+function isEligibleForBatch(lead: Contact, activeIds: Set<string>, type: string, channel?: RecommendedChannel, niche?: NicheKey | "all") {
+  if (isAlreadyInActiveBatch(lead, activeIds)) return false;
 
   if (type === "followup_overdue") {
     const due = lead.followup_due_date || lead.fecha_seguimiento;
@@ -565,14 +681,8 @@ function isEligibleForBatch(lead: Contact, activeIds: Set<string>, type: string,
   }
 
   if (isBlockedBatchStatus(lead.estado || lead.status) || isRecentlyContacted(lead)) return false;
-  if (niche && niche !== "all" && resolveLeadNiche(lead) !== niche) return false;
-  if (channel === "whatsapp") return leadChannel === "whatsapp";
-  if (channel === "instagram") return hasValue(lead.instagram);
-  if (channel === "email") return hasValue(lead.correo || lead.email);
-  if (type === "instagram") return hasValue(lead.instagram);
-  if (type === "email") return hasValue(lead.correo || lead.email);
-  if (type === "whatsapp") return leadChannel === "whatsapp";
-  return leadChannel !== "sin_canal";
+  if (!isInBatchScope(lead, niche)) return false;
+  return hasRequestedBatchChannel(lead, type, channel);
 }
 
 async function appendStructuredRow(tab: string, headers: string[], row: SheetObject) {
@@ -618,6 +728,7 @@ export async function createBatchFromSheet(input: {
       return channelRank(getRecommendedChannel(a)) - channelRank(getRecommendedChannel(b));
     })
     .slice(0, limit);
+  const summary = buildBatchSummary(contacts, activeIds, type, channel, input.niche, candidates);
 
   const batchId = `BATCH-${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14)}`;
   const leadRefs = candidates.map((lead) => ({
@@ -646,7 +757,7 @@ export async function createBatchFromSheet(input: {
     created_at: new Date().toISOString(),
   });
 
-  return { batch_id: batchId, leads: candidates, total: candidates.length };
+  return { batch_id: batchId, leads: candidates, total: candidates.length, summary };
 }
 
 export async function saveProposal(input: {

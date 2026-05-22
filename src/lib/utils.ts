@@ -319,7 +319,7 @@ export function getFallbackConsultativeMessage(lead: Contact) {
   const person = getLeadPersonName(lead);
   const namePart = person && person !== "Contacto por confirmar" ? person : business;
 
-  return `Hola, ${namePart}. Soy Marcos Hilario, de Luma Premium.\n\nHice una revision preliminar basada en senales publicas de ${business} y vi una oportunidad visible en la ruta comercial digital: captacion, filtro y seguimiento de interesados.\n\nNo es una critica ni una auditoria interna. Es una observacion breve desde afuera.\n\nTe la puedo compartir?`;
+  return `Hola, ${namePart}. Soy Marcos Hilario, de Luma Premium. Vi señales públicas de tu presencia comercial y noté una oportunidad para organizar mejor captación, seguimiento y ruta comercial. No hablo de una página web genérica, sino de infraestructura para convertir mejor los prospectos que ya llegan. ¿Te puedo compartir una observación breve?`;
 }
 
 export function getInstagramDmFallback(lead: Contact) {
