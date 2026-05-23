@@ -235,6 +235,20 @@ textarea:focus-visible {
     color: #f5d78c;
   }
 
+  .luma-drawer-tabstrip {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(199, 164, 90, 0.35) transparent;
+  }
+
+  .luma-drawer-tabstrip::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .luma-drawer-tabstrip::-webkit-scrollbar-thumb {
+    background: rgba(199, 164, 90, 0.28);
+    border-radius: 9999px;
+  }
+
   .luma-choice {
     display: flex;
     flex-direction: column;

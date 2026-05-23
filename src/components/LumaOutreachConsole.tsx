@@ -2100,7 +2100,7 @@ function LeadDetailDrawer({
   return (
     <div className="fixed inset-0 z-[80] overflow-hidden bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <aside
-        className="ml-auto flex h-dvh w-full max-w-none flex-col overflow-x-hidden overflow-y-auto border-white/[0.1] bg-[var(--luma-surface)] p-4 pb-6 shadow-2xl sm:max-w-3xl sm:border-l sm:p-5 sm:pb-8"
+        className="ml-auto flex h-dvh w-full max-w-none scroll-pb-28 flex-col overflow-x-hidden overflow-y-auto border-white/[0.1] bg-[var(--luma-surface)] p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-3xl sm:border-l sm:p-5 sm:pb-24"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -2163,14 +2163,14 @@ function LeadDetailDrawer({
           />
         )}
 
-        <div className="sticky top-0 z-10 mt-5 -mx-4 overflow-x-hidden border-y border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
-          <div className="flex min-w-0 flex-wrap gap-2">
+        <div className="sticky top-0 z-10 mt-5 -mx-4 overflow-x-auto overscroll-x-contain scroll-smooth border-y border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5 luma-drawer-tabstrip">
+          <div className="flex w-max min-w-full gap-2">
             {LEAD_DRAWER_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={cn("luma-mobile-tab min-h-11 px-4", activeTab === tab.key && "luma-mobile-tab-active")}
+                className={cn("luma-mobile-tab min-h-11 shrink-0 px-4", activeTab === tab.key && "luma-mobile-tab-active")}
               >
                 {tab.label}
               </button>
@@ -2180,7 +2180,7 @@ function LeadDetailDrawer({
 
         <div className="mt-5 min-w-0 overflow-x-hidden">{renderTabContent()}</div>
 
-        <div className="mt-5 flex min-w-0 flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
+        <div className="mt-5 flex min-w-0 flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <ActionButton icon={Copy} variant="gold" onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
           <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(whatsappNumber)}>Abrir WhatsApp</ActionButton>
           <OutcomeMenu onOutcome={(outcome) => onOutcome(lead, outcome, channel)} />
@@ -5186,7 +5186,7 @@ export function LumaOutreachConsole({
 
   return (
     <main className="min-h-screen bg-[var(--luma-void)] text-[var(--luma-ivory)]">
-      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[var(--luma-void)]/95 px-4 py-3 backdrop-blur-xl xl:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[var(--luma-void)]/95 px-4 py-3 backdrop-blur-xl lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <button
             type="button"
@@ -5221,7 +5221,7 @@ export function LumaOutreachConsole({
             <motion.button
               type="button"
               aria-label="Cerrar menu"
-              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm xl:hidden"
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm lg:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -5231,7 +5231,7 @@ export function LumaOutreachConsole({
               role="dialog"
               aria-modal="true"
               aria-label="Navegacion movil"
-              className="fixed left-0 top-0 z-[60] flex h-dvh w-[min(22rem,calc(100vw-2rem))] flex-col border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 shadow-2xl xl:hidden"
+              className="fixed left-0 top-0 z-[60] flex h-dvh w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl lg:hidden"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -5259,7 +5259,7 @@ export function LumaOutreachConsole({
                 </div>
               </div>
 
-              <nav className="mt-5 flex flex-1 flex-col gap-1 overflow-y-auto pr-1">
+              <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.key}
@@ -5283,8 +5283,8 @@ export function LumaOutreachConsole({
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex w-full max-w-[1720px] gap-6 px-4 py-4 lg:px-6 xl:py-5">
-        <aside className="sticky top-5 hidden h-[calc(100vh-40px)] w-72 shrink-0 flex-col rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/[0.92] p-4 xl:flex">
+      <div className="mx-auto flex w-full max-w-[1720px] gap-6 px-4 py-4 pt-24 lg:px-6 lg:pt-5 xl:py-5">
+        <aside className="sticky top-5 hidden h-[calc(100dvh-40px)] min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/[0.92] p-4 lg:flex">
           <div className="rounded-lg border border-[#C7A45A]/[0.18] bg-[#C7A45A]/[0.08] p-4">
             <div className="flex items-center gap-3">
               <div className="grid h-11 w-11 place-items-center rounded-lg border border-[#C7A45A]/30 bg-black/20 text-[#F5D78C]">
@@ -5297,7 +5297,7 @@ export function LumaOutreachConsole({
             </div>
           </div>
 
-          <nav className="mt-5 flex flex-1 flex-col gap-1 overflow-y-auto pr-1">
+          <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.key}
