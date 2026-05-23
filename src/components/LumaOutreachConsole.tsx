@@ -136,6 +136,7 @@ type QuickFilter =
   | "brokers_sin_web";
 
 type LeadDrawerTab = "summary" | "contact" | "message" | "followup" | "proposal" | "audit" | "notes";
+type ContactOutcomeKey = "responded" | "no_response" | "seen_no_response" | "schedule_followup" | "not_interested" | "pause";
 
 type PostContactPromptState = {
   leadId: string;
@@ -200,6 +201,85 @@ const STATUS_ACTIONS: Array<{ status: ContactStatus; label: string }> = [
   { status: "call", label: "Llamada" },
   { status: "proposal_sent", label: "Propuesta enviada" },
   { status: "not_interested", label: "No interesado" },
+];
+
+const CONTACT_OUTCOME_DEFINITIONS: Array<{
+  key: ContactOutcomeKey;
+  label: string;
+  status: ContactStatus;
+  responseType: string;
+  nextStep: string;
+  followupDays?: number;
+  incrementContactCount: boolean;
+  icon: LucideIcon;
+  variant?: "default" | "gold" | "danger";
+}> = [
+  {
+    key: "responded",
+    label: "Respondi\u00f3",
+    status: "replied",
+    responseType: "Pendiente de clasificar",
+    nextStep: "Calificar interes y proponer llamada corta",
+    incrementContactCount: true,
+    icon: CheckCircle2,
+    variant: "gold",
+  },
+  {
+    key: "no_response",
+    label: "No respondi\u00f3",
+    status: "follow_up",
+    responseType: "Sin respuesta",
+    nextStep: "Hacer seguimiento",
+    followupDays: 2,
+    incrementContactCount: true,
+    icon: XCircle,
+  },
+  {
+    key: "seen_no_response",
+    label: "Visto / sin respuesta",
+    status: "follow_up",
+    responseType: "Visto sin respuesta",
+    nextStep: "Hacer seguimiento",
+    followupDays: 2,
+    incrementContactCount: true,
+    icon: MessageCircle,
+  },
+  {
+    key: "schedule_followup",
+    label: "Programar seguimiento",
+    status: "follow_up",
+    responseType: "Seguimiento programado",
+    nextStep: "Hacer seguimiento",
+    followupDays: 2,
+    incrementContactCount: true,
+    icon: CalendarClock,
+  },
+  {
+    key: "not_interested",
+    label: "No interesado",
+    status: "not_interested",
+    responseType: "No interesado",
+    nextStep: "Excluir de proximos lotes",
+    incrementContactCount: true,
+    icon: XCircle,
+    variant: "danger",
+  },
+  {
+    key: "pause",
+    label: "Sin acci\u00f3n por ahora",
+    status: "sin_accion_por_ahora",
+    responseType: "Sin acci\u00f3n",
+    nextStep: "Pausa temporal; no descartar el lead",
+    incrementContactCount: false,
+    icon: ShieldCheck,
+  },
+];
+
+const CONTACT_OUTCOME_HELP = [
+  "Sin acci\u00f3n por ahora: pausa temporal, no descarta el lead.",
+  "No interesado: excluir de proximos lotes.",
+  "Seguimiento: volver a contactar en fecha programada.",
+  "Contactado sin respuesta: contacto realizado, pendiente seguimiento.",
 ];
 
 const FOLLOW_UP_STATUSES = new Set<ContactStatus>([
@@ -504,6 +584,107 @@ function visibleValue(value: unknown) {
   return hasValue(value) ? String(value) : "No visible";
 }
 
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9@._+\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function digitsOnly(value: unknown) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function isLooseTokenMatch(queryToken: string, textToken: string) {
+  if (textToken.includes(queryToken) || queryToken.includes(textToken)) return true;
+  if (queryToken.length < 4 || textToken.length < 4) return false;
+  if (Math.abs(queryToken.length - textToken.length) > 1) return false;
+
+  let edits = 0;
+  let queryIndex = 0;
+  let textIndex = 0;
+  while (queryIndex < queryToken.length && textIndex < textToken.length) {
+    if (queryToken[queryIndex] === textToken[textIndex]) {
+      queryIndex += 1;
+      textIndex += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (queryToken.length > textToken.length) queryIndex += 1;
+    else if (textToken.length > queryToken.length) textIndex += 1;
+    else {
+      queryIndex += 1;
+      textIndex += 1;
+    }
+  }
+
+  return edits + (queryToken.length - queryIndex) + (textToken.length - textIndex) <= 1;
+}
+
+function addDaysDate(days: number) {
+  return new Date(Date.now() + 1000 * 60 * 60 * 24 * days).toISOString().slice(0, 10);
+}
+
+function sheetStatusLabel(status: unknown) {
+  const normalized = normalizeSearchText(status).replace(/[\s-]+/g, "_");
+  const labels: Record<string, string> = {
+    pending: "Pendiente",
+    pendiente: "Pendiente",
+    listo_contacto: "Pendiente",
+    failed: "Pendiente",
+    contacted: "Contactado",
+    contactado: "Contactado",
+    replied: "Respondi\u00f3",
+    respondio: "Respondi\u00f3",
+    interested: "Respondi\u00f3",
+    follow_up: "Seguimiento",
+    seguimiento: "Seguimiento",
+    call: "Llamada",
+    appointment: "Llamada",
+    llamada: "Llamada",
+    proposal_sent: "Propuesta enviada",
+    propuesta_enviada: "Propuesta enviada",
+    negotiating: "Negociando",
+    negociando: "Negociando",
+    closed: "Cerrado",
+    cerrado: "Cerrado",
+    lost: "Descartado",
+    not_interested: "No interesado",
+    no_interesado: "No interesado",
+    referred: "Referido",
+    referido: "Referido",
+    sin_accion_por_ahora: "Sin acci\u00f3n por ahora",
+    discarded: "Descartado",
+    descartado: "Descartado",
+  };
+  return labels[normalized] || (hasValue(status) ? String(status) : "Pendiente");
+}
+
+function sheetSafeLeadPatch(patch: Partial<Contact>) {
+  const next: Record<string, unknown> = { ...patch };
+  const statusValue = patch.status ?? patch.estado;
+  delete next.status;
+  if (statusValue) next.estado = sheetStatusLabel(statusValue);
+  return next;
+}
+
+function sheetSaveToastMessage(lead: Contact, patch: Partial<Contact>) {
+  const status = sheetStatusLabel(patch.status ?? patch.estado ?? lead.status);
+  const responseType = String(patch.tipo_respuesta ?? lead.tipo_respuesta ?? "Sin clasificar");
+  const nextStep = String(patch.proximo_paso ?? patch.nextStep ?? lead.proximo_paso ?? lead.nextStep ?? "Sin proximo paso");
+  return [
+    "Guardado en Google Sheets",
+    `Lead: ${getLeadBusinessName(lead)}`,
+    `Estado: ${status}`,
+    `Tipo de respuesta: ${responseType}`,
+    `Pr\u00f3ximo paso: ${nextStep}`,
+  ].join("\n");
+}
+
 function formatLocalDateTime(value?: string) {
   if (!value) return "Sin fecha";
   const date = new Date(value);
@@ -644,6 +825,10 @@ function buildLeadSearchText(lead: Contact) {
     lead.name,
     lead.nombre_negocio,
     lead.nombre_persona,
+    lead.empresa_marca,
+    lead.cargo_rol,
+    lead.ciudad_zona,
+    lead.city,
     lead.phone,
     lead.telefono,
     getLeadPhoneNumber(lead),
@@ -659,6 +844,7 @@ function buildLeadSearchText(lead: Contact) {
     lead.nicho,
     statusLabel(lead.status),
     lead.estado,
+    lead.tipo_respuesta,
     CHANNEL_LABELS[getRecommendedChannel(lead)],
     lead.last_channel,
     lead.ultimo_canal_usado,
@@ -683,14 +869,23 @@ function buildLeadSearchText(lead: Contact) {
     lead.oportunidad_visible,
   ]
     .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+    .join(" ");
 }
 
 function leadMatchesQuery(lead: Contact, query: string) {
-  const normalized = query.trim().toLowerCase();
+  const normalized = normalizeSearchText(query);
   if (!normalized) return true;
-  return buildLeadSearchText(lead).includes(normalized);
+  const searchText = normalizeSearchText(buildLeadSearchText(lead));
+  if (searchText.includes(normalized)) return true;
+
+  const queryDigits = digitsOnly(query);
+  if (queryDigits.length >= 3 && digitsOnly(buildLeadSearchText(lead)).includes(queryDigits)) return true;
+
+  const searchTokens = searchText.split(" ").filter(Boolean);
+  return normalized
+    .split(" ")
+    .filter((token) => token.length > 1)
+    .every((queryToken) => searchTokens.some((textToken) => isLooseTokenMatch(queryToken, textToken)));
 }
 
 function readUpload(file: File): Promise<ParsedUpload> {
@@ -900,31 +1095,44 @@ function PostContactPanel({
   lead,
   channel,
   onContacted,
+  onNoResponse,
   onFollowUp,
+  onNotInterested,
   onDismiss,
 }: {
   lead: Contact;
   channel: RecommendedChannel;
   onContacted: () => void;
+  onNoResponse: () => void;
   onFollowUp: () => void;
+  onNotInterested: () => void;
   onDismiss: () => void;
 }) {
+  const isWhatsApp = channel === "whatsapp";
   return (
     <div className="mt-4 rounded-lg border border-[#C7A45A]/30 bg-[#C7A45A]/[0.08] p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="luma-kicker">Confirmacion post-contacto</p>
-          <h4 className="mt-2 text-base font-semibold text-[var(--luma-ivory)]">Contactaste este lead?</h4>
+          <h4 className="mt-2 text-base font-semibold text-[var(--luma-ivory)]">
+            {isWhatsApp ? "WhatsApp abierto. Que paso?" : `${CHANNEL_LABELS[channel] || "Canal"} abierto. Que paso?`}
+          </h4>
           <p className="mt-1 text-sm text-[var(--luma-muted)]">
             Canal abierto: {CHANNEL_LABELS[channel] || channel}. No se marca nada hasta que confirmes.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ActionButton icon={CheckCircle2} variant="gold" onClick={onContacted}>
-            Marcar Contactado
+            Contactado
+          </ActionButton>
+          <ActionButton icon={XCircle} onClick={onNoResponse}>
+            No respondi\u00f3
           </ActionButton>
           <ActionButton icon={CalendarClock} onClick={onFollowUp}>
-            Programar Seguimiento
+            Programar seguimiento
+          </ActionButton>
+          <ActionButton icon={XCircle} variant="danger" onClick={onNotInterested}>
+            No interesado
           </ActionButton>
           <ActionButton onClick={onDismiss}>No todavia</ActionButton>
         </div>
@@ -1113,10 +1321,20 @@ function LeadNextStepCard({ lead }: { lead: Contact }) {
 function LeadRecommendedMessagePanel({
   message,
   onCopy,
+  onOpenWhatsApp,
+  onOutcome,
+  onSave,
+  whatsappNumber,
+  saving,
   compact = false,
 }: {
   message: string;
   onCopy: () => void;
+  onOpenWhatsApp: () => void;
+  onOutcome: (outcome: ContactOutcomeKey) => void;
+  onSave: () => void;
+  whatsappNumber: string;
+  saving?: boolean;
   compact?: boolean;
 }) {
   const cleanMessage = hasValue(message) ? String(message).trim() : "Sin mensaje recomendado.";
@@ -1137,10 +1355,27 @@ function LeadRecommendedMessagePanel({
       </div>
       <details className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
         <summary className="cursor-pointer text-xs font-semibold text-[#F5D78C]">Ver mensaje completo</summary>
+        <StickyActionRail
+          whatsappNumber={whatsappNumber}
+          saving={saving}
+          onCopyMessage={onCopy}
+          onOpenWhatsApp={onOpenWhatsApp}
+          onOutcome={onOutcome}
+          onSave={onSave}
+          copyLabel="Copiar completo"
+          className="mt-3"
+        />
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--luma-muted)]">{cleanMessage}</p>
-        <button type="button" onClick={onCopy} className="mt-3 text-xs font-semibold text-[#F5D78C]">
-          Copiar completo
-        </button>
+        <StickyActionRail
+          whatsappNumber={whatsappNumber}
+          saving={saving}
+          onCopyMessage={onCopy}
+          onOpenWhatsApp={onOpenWhatsApp}
+          onOutcome={onOutcome}
+          onSave={onSave}
+          copyLabel="Copiar completo"
+          className="mt-3"
+        />
       </details>
     </div>
   );
@@ -1154,6 +1389,9 @@ function LeadPrimaryActions({
   onMarkContacted,
   onMarkCall,
   onMarkProposalSent,
+  onNoResponse,
+  onNotInterested,
+  onPause,
   onSave,
   onDetails,
 }: {
@@ -1164,6 +1402,9 @@ function LeadPrimaryActions({
   onMarkContacted: () => void;
   onMarkCall: () => void;
   onMarkProposalSent: () => void;
+  onNoResponse: () => void;
+  onNotInterested: () => void;
+  onPause: () => void;
   onSave: () => void;
   onDetails?: () => void;
 }) {
@@ -1184,14 +1425,124 @@ function LeadPrimaryActions({
       <ActionButton icon={FileSpreadsheet} onClick={onMarkProposalSent} className="order-6 sm:order-5">
         Propuesta enviada
       </ActionButton>
-      <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving} className="order-3 sm:order-6">
+      <ActionButton icon={XCircle} onClick={onNoResponse} className="order-7 sm:order-6">
+        Sin respuesta
+      </ActionButton>
+      <ActionButton icon={XCircle} variant="danger" onClick={onNotInterested} className="order-8 sm:order-7">
+        No interesado
+      </ActionButton>
+      <ActionButton icon={ShieldCheck} onClick={onPause} className="order-9 sm:order-8">
+        Sin acci\u00f3n
+      </ActionButton>
+      <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving} className="order-3 sm:order-9">
         Guardar en Sheets
       </ActionButton>
       {onDetails && (
-        <ActionButton icon={Clipboard} onClick={onDetails} className="order-7">
+        <ActionButton icon={Clipboard} onClick={onDetails} className="order-10">
           Ver detalles
         </ActionButton>
       )}
+    </div>
+  );
+}
+
+function OutcomeButtonGroup({ onOutcome, compact = false }: { onOutcome: (outcome: ContactOutcomeKey) => void; compact?: boolean }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {CONTACT_OUTCOME_DEFINITIONS.map((outcome) => (
+        <ActionButton
+          key={outcome.key}
+          icon={outcome.icon}
+          variant={outcome.variant}
+          onClick={() => onOutcome(outcome.key)}
+          className={compact ? "min-h-9 px-2.5" : undefined}
+        >
+          {outcome.label}
+        </ActionButton>
+      ))}
+    </div>
+  );
+}
+
+function ContactOutcomeBar({
+  lead,
+  onOutcome,
+  compact = false,
+}: {
+  lead: Contact;
+  onOutcome: (outcome: ContactOutcomeKey) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <p className="luma-kicker">Que paso con este contacto?</p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--luma-muted)]">
+            Registra el resultado sin salir de {getLeadBusinessName(lead)}. Estado, tipo de respuesta y proximo paso se guardan separados.
+          </p>
+        </div>
+        <OutcomeButtonGroup onOutcome={onOutcome} compact={compact} />
+      </div>
+      <div className="mt-3 grid gap-2 text-xs leading-relaxed text-white/[0.48] md:grid-cols-2">
+        {CONTACT_OUTCOME_HELP.map((item) => (
+          <p key={item}>{item}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OutcomeMenu({ onOutcome }: { onOutcome: (outcome: ContactOutcomeKey) => void }) {
+  return (
+    <details className="relative">
+      <summary className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white/70 transition hover:border-white/16 hover:bg-white/[0.07] sm:min-h-9">
+        <UserCheck size={14} />
+        Registrar resultado
+      </summary>
+      <div className="mt-2 rounded-lg border border-white/[0.08] bg-[#121820] p-3 shadow-2xl">
+        <OutcomeButtonGroup onOutcome={onOutcome} compact />
+      </div>
+    </details>
+  );
+}
+
+function StickyActionRail({
+  whatsappNumber,
+  saving,
+  onCopyMessage,
+  onOpenWhatsApp,
+  onOutcome,
+  onSave,
+  copyLabel = "Copiar mensaje",
+  className,
+}: {
+  whatsappNumber: string;
+  saving?: boolean;
+  onCopyMessage: () => void;
+  onOpenWhatsApp: () => void;
+  onOutcome: (outcome: ContactOutcomeKey) => void;
+  onSave: () => void;
+  copyLabel?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "sticky top-2 z-20 flex flex-wrap gap-2 rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/95 p-2 backdrop-blur",
+        className,
+      )}
+    >
+      <ActionButton icon={Copy} variant="gold" onClick={onCopyMessage}>
+        {copyLabel}
+      </ActionButton>
+      <ActionButton icon={MessageCircle} onClick={onOpenWhatsApp} disabled={!hasValue(whatsappNumber)}>
+        Abrir WhatsApp
+      </ActionButton>
+      <OutcomeMenu onOutcome={onOutcome} />
+      <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving}>
+        Guardar en Sheets
+      </ActionButton>
     </div>
   );
 }
@@ -1214,6 +1565,7 @@ function LeadOperationalCard({
   onSave,
   onPrepareProposal,
   onUpdateStatus,
+  onOutcome,
   onAssignChannel,
   onCopyContactData,
   onCopyProposalSummary,
@@ -1222,7 +1574,9 @@ function LeadOperationalCard({
   onNotesBlur,
   postContactChannel,
   onPostContacted,
+  onPostNoResponse,
   onPostFollowUp,
+  onPostNotInterested,
   onPostDismiss,
 }: {
   lead: Contact;
@@ -1242,6 +1596,7 @@ function LeadOperationalCard({
   onSave: () => void;
   onPrepareProposal: () => void;
   onUpdateStatus: (status: ContactStatus, channel?: RecommendedChannel) => void;
+  onOutcome: (outcome: ContactOutcomeKey) => void;
   onAssignChannel: (channel: RecommendedChannel) => void;
   onCopyContactData: () => void;
   onCopyProposalSummary: () => void;
@@ -1250,7 +1605,9 @@ function LeadOperationalCard({
   onNotesBlur: (value: string) => void;
   postContactChannel?: RecommendedChannel;
   onPostContacted: () => void;
+  onPostNoResponse: () => void;
   onPostFollowUp: () => void;
+  onPostNotInterested: () => void;
   onPostDismiss: () => void;
 }) {
   const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
@@ -1300,6 +1657,9 @@ function LeadOperationalCard({
         onMarkContacted={() => onUpdateStatus("contacted", channel)}
         onMarkCall={() => onUpdateStatus("call", "llamada")}
         onMarkProposalSent={() => onUpdateStatus("proposal_sent", channel)}
+        onNoResponse={() => onOutcome("no_response")}
+        onNotInterested={() => onOutcome("not_interested")}
+        onPause={() => onOutcome("pause")}
         onSave={onSave}
         onDetails={onDetails}
       />
@@ -1309,12 +1669,25 @@ function LeadOperationalCard({
           lead={lead}
           channel={postContactChannel}
           onContacted={onPostContacted}
+          onNoResponse={onPostNoResponse}
           onFollowUp={onPostFollowUp}
+          onNotInterested={onPostNotInterested}
           onDismiss={onPostDismiss}
         />
       )}
 
-      <LeadRecommendedMessagePanel message={message} onCopy={onCopyMessage} compact />
+      <ContactOutcomeBar lead={lead} onOutcome={onOutcome} />
+
+      <LeadRecommendedMessagePanel
+        message={message}
+        onCopy={onCopyMessage}
+        onOpenWhatsApp={onOpenWhatsApp}
+        onOutcome={onOutcome}
+        onSave={onSave}
+        whatsappNumber={whatsappNumber}
+        saving={saving}
+        compact
+      />
 
       {variant === "proposal" && (
         <div className="mt-4 rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4">
@@ -1366,6 +1739,14 @@ function LeadOperationalCard({
 
       {expanded && (
         <div className="space-y-4 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <StickyActionRail
+            whatsappNumber={whatsappNumber}
+            saving={saving}
+            onCopyMessage={onCopyMessage}
+            onOpenWhatsApp={onOpenWhatsApp}
+            onOutcome={onOutcome}
+            onSave={onSave}
+          />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ContactFieldBlock
               title="Instagram"
@@ -1442,6 +1823,14 @@ function LeadOperationalCard({
             placeholder="Nota comercial: respuesta, objecion, compromiso, siguiente accion..."
             className="luma-input min-h-24 resize-y text-sm"
           />
+          <StickyActionRail
+            whatsappNumber={whatsappNumber}
+            saving={saving}
+            onCopyMessage={onCopyMessage}
+            onOpenWhatsApp={onOpenWhatsApp}
+            onOutcome={onOutcome}
+            onSave={onSave}
+          />
         </div>
       )}
     </article>
@@ -1462,11 +1851,14 @@ function LeadDetailDrawer({
   onPrepareProposal,
   onSave,
   onUpdateStatus,
+  onOutcome,
   onAssignChannel,
   onSaveNotes,
   postContactChannel,
   onPostContacted,
+  onPostNoResponse,
   onPostFollowUp,
+  onPostNotInterested,
   onPostDismiss,
 }: {
   lead: Contact | null;
@@ -1482,11 +1874,14 @@ function LeadDetailDrawer({
   onPrepareProposal: (lead: Contact) => void;
   onSave: (lead: Contact) => void;
   onUpdateStatus: (lead: Contact, status: ContactStatus, channel?: RecommendedChannel) => void;
+  onOutcome: (lead: Contact, outcome: ContactOutcomeKey, channel?: RecommendedChannel) => void;
   onAssignChannel: (lead: Contact, channel: RecommendedChannel) => void;
   onSaveNotes: (lead: Contact, notes: string) => void;
   postContactChannel?: RecommendedChannel;
   onPostContacted: () => void;
+  onPostNoResponse: () => void;
   onPostFollowUp: () => void;
+  onPostNotInterested: () => void;
   onPostDismiss: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<LeadDrawerTab>("summary");
@@ -1706,7 +2101,15 @@ function LeadDetailDrawer({
         </div>
 
         <div className="mt-4">
-          <LeadRecommendedMessagePanel message={message} onCopy={() => onCopyMessage(lead)} />
+          <LeadRecommendedMessagePanel
+            message={message}
+            onCopy={() => onCopyMessage(lead)}
+            onOpenWhatsApp={() => onOpenWhatsApp(lead)}
+            onOutcome={(outcome) => onOutcome(lead, outcome, channel)}
+            onSave={() => onSave(lead)}
+            whatsappNumber={whatsappNumber}
+            saving={saving}
+          />
         </div>
 
         <div className="mt-4">
@@ -1718,8 +2121,15 @@ function LeadDetailDrawer({
             onMarkContacted={() => onUpdateStatus(lead, "contacted", channel)}
             onMarkCall={() => onUpdateStatus(lead, "call", "llamada")}
             onMarkProposalSent={() => onUpdateStatus(lead, "proposal_sent", channel)}
+            onNoResponse={() => onOutcome(lead, "no_response", channel)}
+            onNotInterested={() => onOutcome(lead, "not_interested", channel)}
+            onPause={() => onOutcome(lead, "pause", channel)}
             onSave={() => onSave(lead)}
           />
+        </div>
+
+        <div className="mt-4">
+          <ContactOutcomeBar lead={lead} onOutcome={(outcome) => onOutcome(lead, outcome, channel)} compact />
         </div>
 
         {postContactChannel && (
@@ -1727,7 +2137,9 @@ function LeadDetailDrawer({
             lead={lead}
             channel={postContactChannel}
             onContacted={onPostContacted}
+            onNoResponse={onPostNoResponse}
             onFollowUp={onPostFollowUp}
+            onNotInterested={onPostNotInterested}
             onDismiss={onPostDismiss}
           />
         )}
@@ -1749,7 +2161,10 @@ function LeadDetailDrawer({
 
         <div className="mt-5">{renderTabContent()}</div>
 
-        <div className="sticky bottom-0 mt-5 flex flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
+        <div className="sticky bottom-0 z-20 mt-5 flex flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
+          <ActionButton icon={Copy} variant="gold" onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
+          <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(whatsappNumber)}>Abrir WhatsApp</ActionButton>
+          <OutcomeMenu onOutcome={(outcome) => onOutcome(lead, outcome, channel)} />
           <ActionButton icon={Clipboard} variant="gold" onClick={() => onPrepareProposal(lead)}>Preparar propuesta</ActionButton>
           <ActionButton icon={Save} variant="gold" onClick={() => onSave(lead)} disabled={saving}>Guardar en Sheets</ActionButton>
         </div>
@@ -1774,7 +2189,9 @@ function PrepareProposalModal({
   onOpenDemo,
   postContactChannel,
   onPostContacted,
+  onPostNoResponse,
   onPostFollowUp,
+  onPostNotInterested,
   onPostDismiss,
 }: {
   lead: Contact | null;
@@ -1792,7 +2209,9 @@ function PrepareProposalModal({
   onOpenDemo: (lead: Contact) => void;
   postContactChannel?: RecommendedChannel;
   onPostContacted: () => void;
+  onPostNoResponse: () => void;
   onPostFollowUp: () => void;
+  onPostNotInterested: () => void;
   onPostDismiss: () => void;
 }) {
   if (!lead) return null;
@@ -1870,7 +2289,9 @@ function PrepareProposalModal({
             lead={lead}
             channel={postContactChannel}
             onContacted={onPostContacted}
+            onNoResponse={onPostNoResponse}
             onFollowUp={onPostFollowUp}
+            onNotInterested={onPostNotInterested}
             onDismiss={onPostDismiss}
           />
         )}
@@ -2441,7 +2862,7 @@ export function LumaOutreachConsole({
           row_number: lead.row_number || lead.importedRow,
           lead_id: lead.id,
           tab: lead.sheet_tab || "Prospectos",
-          updates: patch,
+          updates: sheetSafeLeadPatch(patch),
           incrementContactCount: Boolean(options.incrementContactCount),
           confirmAdvancedState: Boolean(options.confirmAdvancedState),
         }),
@@ -2490,7 +2911,7 @@ export function LumaOutreachConsole({
         ticket_rd: getLeadTicket(lead),
         demo_url: demo.url,
         canal_envio: getRecommendedChannel(lead),
-        estado_propuesta: lead.status === "proposal_sent" || lead.status === "propuesta_enviada" ? "enviada" : lead.status,
+        estado_propuesta: lead.status === "proposal_sent" || lead.status === "propuesta_enviada" ? "enviada" : sheetStatusLabel(lead.status),
         monto_estimado_rd: String(lead.monto_estimado ?? ""),
         link_propuesta: lead.propuesta_link,
         notas_propuesta: lead.conversation_summary || lead.notas || lead.notes,
@@ -2533,6 +2954,7 @@ export function LumaOutreachConsole({
         estado: lead.status,
         proximo_paso: lead.proximo_paso || lead.nextStep || "",
         nextStep: lead.nextStep || lead.proximo_paso || "",
+        tipo_respuesta: lead.tipo_respuesta || "",
         ultimo_canal_usado: channel,
         last_channel: channel,
         propuesta_link: lead.propuesta_link || "",
@@ -2544,7 +2966,7 @@ export function LumaOutreachConsole({
 
       try {
         await saveLeadPatchToSheets(lead, patch);
-        setToast({ message: `${getLeadBusinessName(lead)}: Guardado en Sheets.`, type: "success" });
+        setToast({ message: sheetSaveToastMessage(lead, patch), type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : "No pude guardar en Sheets.";
         setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
@@ -2563,7 +2985,7 @@ export function LumaOutreachConsole({
       const countsAsAttempt = OUTBOUND_ATTEMPT_STATUSES.has(status) && lead.status !== status;
       const countsAsContactCount = countsAsAttempt || isContact;
       const isProposalStatus = PROPOSAL_STATUSES.has(status);
-      const defaultFollowupDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString().slice(0, 10);
+      const defaultFollowupDate = addDaysDate(2);
       const nextStep =
         status === "replied" || status === "respondio"
           ? "Calificar interes y proponer llamada corta"
@@ -2578,12 +3000,29 @@ export function LumaOutreachConsole({
                 : status === "proposal_sent" || status === "propuesta_enviada"
                   ? "Seguimiento de propuesta"
                   : lead.proximo_paso || lead.nextStep;
+      const responseType =
+        status === "contacted"
+          ? "Contactado sin respuesta"
+          : status === "replied" || status === "respondio"
+            ? "Pendiente de clasificar"
+            : status === "follow_up"
+              ? "Seguimiento programado"
+              : status === "call" || status === "appointment"
+                ? "Llamada"
+                : status === "proposal_sent" || status === "propuesta_enviada"
+                  ? "Propuesta enviada"
+                  : status === "not_interested"
+                    ? "No interesado"
+                    : status === "sin_accion_por_ahora"
+                      ? "Sin acci\u00f3n"
+                      : lead.tipo_respuesta;
 
       const patch: Partial<Contact> = {
         status,
         estado: status,
         proximo_paso: nextStep,
         nextStep,
+        tipo_respuesta: responseType,
         ultimo_canal_usado: channel ?? lead.ultimo_canal_usado ?? getRecommendedChannel(lead),
         last_channel: channel ?? lead.last_channel ?? lead.ultimo_canal_usado ?? getRecommendedChannel(lead),
         cantidad_contactos: countsAsContactCount ? currentCount + 1 : currentCount,
@@ -2596,7 +3035,7 @@ export function LumaOutreachConsole({
           status === "proposal_sent" || status === "propuesta_enviada"
             ? lead.fecha_propuesta || now.slice(0, 10)
             : lead.fecha_propuesta,
-        decision_status: isProposalStatus ? status : lead.decision_status,
+        decision_status: isProposalStatus ? sheetStatusLabel(status) : lead.decision_status,
         followup_due_date:
           status === "follow_up" || status === "proposal_sent" || status === "propuesta_enviada"
             ? lead.followup_due_date || lead.fecha_seguimiento || defaultFollowupDate
@@ -2614,7 +3053,7 @@ export function LumaOutreachConsole({
       try {
         await saveLeadPatchToSheets(lead, patch, { incrementContactCount: countsAsContactCount });
         if (isProposalStatus) await saveProposalToSheets({ ...lead, ...patch } as Contact);
-        setToast({ message: `${getLeadBusinessName(lead)}: ${statusLabel(status)}. Guardado en Sheets.`, type: "success" });
+        setToast({ message: sheetSaveToastMessage(lead, patch), type: "success" });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Cambio local guardado; fallo Google Sheets.";
         setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
@@ -2622,6 +3061,52 @@ export function LumaOutreachConsole({
       }
     },
     [patchLead, saveLeadPatchToSheets, saveProposalToSheets],
+  );
+
+  const applyContactOutcome = useCallback(
+    async (lead: Contact, outcomeKey: ContactOutcomeKey, channel?: RecommendedChannel) => {
+      const outcome = CONTACT_OUTCOME_DEFINITIONS.find((item) => item.key === outcomeKey);
+      if (!outcome) return;
+
+      const now = new Date().toISOString();
+      const currentCount = Number(lead.cantidad_contactos ?? lead.sentCount ?? 0);
+      const currentAttempts = Number(lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0) || 0;
+      const nextChannel = channel ?? lead.last_channel ?? lead.ultimo_canal_usado ?? getRecommendedChannel(lead);
+      const followupDate = outcome.followupDays ? addDaysDate(outcome.followupDays) : lead.followup_due_date || lead.fecha_seguimiento;
+      const countsAsContact = outcome.incrementContactCount;
+      const patch: Partial<Contact> = {
+        status: outcome.status,
+        estado: outcome.status,
+        tipo_respuesta: outcome.responseType,
+        proximo_paso: outcome.nextStep,
+        nextStep: outcome.nextStep,
+        ultimo_canal_usado: nextChannel,
+        last_channel: nextChannel,
+        cantidad_contactos: countsAsContact ? currentCount + 1 : currentCount,
+        sentCount: countsAsContact ? currentCount + 1 : currentCount,
+        attempt_count: countsAsContact ? currentAttempts + 1 : currentAttempts,
+        fecha_contacto: countsAsContact ? lead.fecha_contacto || now.slice(0, 10) : lead.fecha_contacto,
+        lastContactDate: countsAsContact ? lead.lastContactDate || now.slice(0, 10) : lead.lastContactDate,
+        last_interaction_date: outcome.status === "sin_accion_por_ahora" ? lead.last_interaction_date : now,
+        followup_due_date: outcome.status === "follow_up" ? followupDate : lead.followup_due_date,
+        fecha_seguimiento: outcome.status === "follow_up" ? followupDate : lead.fecha_seguimiento,
+        conversation_summary: lead.conversation_summary || lead.notas || lead.notes,
+      };
+
+      patchLead(lead.id, patch);
+      setPostContactPrompt(null);
+      setToast({ message: `${getLeadBusinessName(lead)}: ${outcome.label}. Guardando en Sheets...`, type: "info" });
+
+      try {
+        await saveLeadPatchToSheets(lead, patch, { incrementContactCount: countsAsContact });
+        setToast({ message: sheetSaveToastMessage(lead, patch), type: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Resultado local guardado; fallo Google Sheets.";
+        setSheetsSync((prev) => ({ ...prev, isSaving: false, error: message, mode: "local_fallback" }));
+        setToast({ message: `${getLeadBusinessName(lead)}: resultado pendiente de guardar en Sheets. ${message}`, type: "error" });
+      }
+    },
+    [patchLead, saveLeadPatchToSheets],
   );
 
   const assignLeadChannel = useCallback(
@@ -2819,6 +3304,19 @@ export function LumaOutreachConsole({
       await updateLeadStatus(lead, status, postContactPrompt.channel);
     },
     [contacts, postContactPrompt, updateLeadStatus],
+  );
+
+  const confirmPostContactOutcome = useCallback(
+    async (outcome: ContactOutcomeKey) => {
+      if (!postContactPrompt) return;
+      const lead = contacts.find((item) => item.id === postContactPrompt.leadId);
+      if (!lead) {
+        setPostContactPrompt(null);
+        return;
+      }
+      await applyContactOutcome(lead, outcome, postContactPrompt.channel);
+    },
+    [applyContactOutcome, contacts, postContactPrompt],
   );
 
   const openPhoneManual = useCallback(
@@ -3452,6 +3950,7 @@ export function LumaOutreachConsole({
         onSave={() => saveLeadToSheets(lead)}
         onPrepareProposal={() => openProposalPreparation(lead)}
         onUpdateStatus={(status, nextChannel) => updateLeadStatus(lead, status, nextChannel ?? channel)}
+        onOutcome={(outcome) => void applyContactOutcome(lead, outcome, channel)}
         onAssignChannel={(nextChannel) => assignLeadChannel(lead, nextChannel)}
         onCopyContactData={() => copyContactData(lead)}
         onCopyProposalSummary={() => copyText(buildProposalSummary(lead), "Resumen de propuesta")}
@@ -3460,7 +3959,9 @@ export function LumaOutreachConsole({
         onNotesBlur={(value) => saveLeadNotes(lead, value)}
         postContactChannel={postContactPrompt?.leadId === lead.id ? postContactPrompt.channel : undefined}
         onPostContacted={() => void confirmPostContactStatus("contacted")}
-        onPostFollowUp={() => void confirmPostContactStatus("follow_up")}
+        onPostNoResponse={() => void confirmPostContactOutcome("no_response")}
+        onPostFollowUp={() => void confirmPostContactOutcome("schedule_followup")}
+        onPostNotInterested={() => void confirmPostContactOutcome("not_interested")}
         onPostDismiss={dismissPostContactConfirmation}
       />
     );
@@ -3985,7 +4486,7 @@ export function LumaOutreachConsole({
           <input
             value={todaySearch}
             onChange={(event) => setTodaySearch(event.target.value)}
-            placeholder="Buscar en Lote de Hoy: Eddy Veras, negocio, persona, telefono, WhatsApp, Instagram, email, nicho o estado..."
+            placeholder="Buscar por nombre, WhatsApp, Instagram, estado, ciudad o empresa..."
             className="luma-input pl-10"
           />
         </div>
@@ -4001,7 +4502,7 @@ export function LumaOutreachConsole({
       ) : (
         <div className="space-y-3">
           {visibleTodayBatch.length === 0 ? (
-            <EmptyState icon={Search} title="No hay resultados en este lote." body="Cambia la busqueda local o limpia filtros para continuar." />
+            <EmptyState icon={Search} title="No encontramos ese texto." body="Prueba con parte del apellido, telefono o Instagram." />
           ) : (
             visibleTodayBatch.map((lead) => renderOperationalLeadCard(lead))
           )}
@@ -4025,7 +4526,7 @@ export function LumaOutreachConsole({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre, negocio, persona, telefono, WhatsApp, Instagram, email, nicho, estado, oferta o notas..."
+              placeholder="Buscar por nombre, WhatsApp, Instagram, estado, ciudad o empresa..."
               className="luma-input pl-10"
             />
           </div>
@@ -4142,7 +4643,7 @@ export function LumaOutreachConsole({
 
       <div className="space-y-4">
         {filteredLeads.length === 0 ? (
-          <EmptyState title="No hay resultados con estos filtros." body="Limpia filtros o cambia busqueda." />
+          <EmptyState title="No encontramos ese texto." body="Prueba con parte del apellido, telefono o Instagram." />
         ) : (
           visibleProspectRows.map((lead) => renderOperationalLeadCard(lead))
         )}
@@ -4168,14 +4669,14 @@ export function LumaOutreachConsole({
             <input
               value={followupSearch}
               onChange={(event) => setFollowupSearch(event.target.value)}
-              placeholder="Buscar seguimiento por nombre, negocio, estado, proximo paso, canal, fecha, propuesta o notas..."
+              placeholder="Buscar por nombre, WhatsApp, Instagram, estado, ciudad o empresa..."
               className="luma-input pl-10"
             />
           </div>
         </div>
         {renderSelectionToolbar(leads, "Seguimiento")}
         {leads.length === 0 ? (
-          <EmptyState icon={RefreshCw} title="Aun no hay leads en seguimiento." body="Marca contactados, respuestas o interesados desde el lote de hoy." />
+          <EmptyState icon={RefreshCw} title={followupSearch.trim() ? "No encontramos ese texto." : "Aun no hay leads en seguimiento."} body={followupSearch.trim() ? "Prueba con parte del apellido, telefono o Instagram." : "Marca contactados, respuestas o interesados desde el lote de hoy."} />
         ) : (
           <div className="space-y-4">
             {leads.map((lead) => renderOperationalLeadCard(lead))}
@@ -4885,6 +5386,7 @@ export function LumaOutreachConsole({
         <div
           className={cn(
             "fixed bottom-5 right-5 z-50 max-w-lg rounded-lg border px-5 py-4 text-base font-semibold leading-relaxed shadow-2xl",
+            "whitespace-pre-line",
             toast.type === "success"
               ? "border-emerald-300/20 bg-emerald-950 text-emerald-100"
               : toast.type === "error"
@@ -4909,11 +5411,14 @@ export function LumaOutreachConsole({
         onPrepareProposal={openProposalPreparation}
         onSave={saveLeadToSheets}
         onUpdateStatus={updateLeadStatus}
+        onOutcome={(lead, outcome, channel) => void applyContactOutcome(lead, outcome, channel)}
         onAssignChannel={assignLeadChannel}
         onSaveNotes={saveLeadNotes}
         postContactChannel={detailDrawerLead && postContactPrompt?.leadId === detailDrawerLead.id ? postContactPrompt.channel : undefined}
         onPostContacted={() => void confirmPostContactStatus("contacted")}
-        onPostFollowUp={() => void confirmPostContactStatus("follow_up")}
+        onPostNoResponse={() => void confirmPostContactOutcome("no_response")}
+        onPostFollowUp={() => void confirmPostContactOutcome("schedule_followup")}
+        onPostNotInterested={() => void confirmPostContactOutcome("not_interested")}
         onPostDismiss={dismissPostContactConfirmation}
       />
       <PrepareProposalModal
@@ -4932,7 +5437,9 @@ export function LumaOutreachConsole({
         onOpenDemo={(lead) => window.open(getLeadDemo(lead).url, "_blank", "noopener,noreferrer")}
         postContactChannel={proposalDraftLead && postContactPrompt?.leadId === proposalDraftLead.id ? postContactPrompt.channel : undefined}
         onPostContacted={() => void confirmPostContactStatus("contacted")}
-        onPostFollowUp={() => void confirmPostContactStatus("follow_up")}
+        onPostNoResponse={() => void confirmPostContactOutcome("no_response")}
+        onPostFollowUp={() => void confirmPostContactOutcome("schedule_followup")}
+        onPostNotInterested={() => void confirmPostContactOutcome("not_interested")}
         onPostDismiss={dismissPostContactConfirmation}
       />
     </main>
