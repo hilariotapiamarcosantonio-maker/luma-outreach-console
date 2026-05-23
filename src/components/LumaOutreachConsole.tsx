@@ -2100,70 +2100,26 @@ function LeadDetailDrawer({
   return (
     <div className="fixed inset-0 z-[80] overflow-hidden bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <aside
-        className="ml-auto flex h-dvh w-full max-w-none scroll-pb-28 flex-col overflow-x-hidden overflow-y-auto border-white/[0.1] bg-[var(--luma-surface)] p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-3xl sm:border-l sm:p-5 sm:pb-24"
+        className="fixed right-0 top-0 bottom-0 ml-auto flex h-dvh w-full max-w-none flex-col overflow-hidden border-white/[0.1] bg-[var(--luma-surface)] shadow-2xl sm:max-w-3xl sm:border-l"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <LeadIdentityHeader lead={lead} compact />
-          <button
-            type="button"
-            aria-label="Cerrar detalles"
-            onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70"
-          >
-            <X size={17} />
-          </button>
+        {/* Header (Fijo) */}
+        <div className="flex-shrink-0 border-b border-white/[0.08] p-4 sm:p-5">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <LeadIdentityHeader lead={lead} compact />
+            <button
+              type="button"
+              aria-label="Cerrar detalles"
+              onClick={onClose}
+              className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] transition"
+            >
+              <X size={17} />
+            </button>
+          </div>
         </div>
 
-        <div className="mt-5">
-          <LeadCommercialSummary lead={lead} channel={channel} />
-        </div>
-
-        <div className="mt-4">
-          <LeadPrimaryActions
-            whatsappNumber={whatsappNumber}
-            saving={saving}
-            onCopyMessage={() => onCopyMessage(lead)}
-            onOpenWhatsApp={() => onOpenWhatsApp(lead)}
-            onMarkContacted={() => onUpdateStatus(lead, "contacted", channel)}
-            onMarkCall={() => onUpdateStatus(lead, "call", "llamada")}
-            onMarkProposalSent={() => onUpdateStatus(lead, "proposal_sent", channel)}
-            onNoResponse={() => onOutcome(lead, "no_response", channel)}
-            onNotInterested={() => onOutcome(lead, "not_interested", channel)}
-            onPause={() => onOutcome(lead, "pause", channel)}
-            onSave={() => onSave(lead)}
-          />
-        </div>
-
-        <div className="mt-4">
-          <LeadRecommendedMessagePanel
-            message={message}
-            onCopy={() => onCopyMessage(lead)}
-            onOpenWhatsApp={() => onOpenWhatsApp(lead)}
-            onOutcome={(outcome) => onOutcome(lead, outcome, channel)}
-            onSave={() => onSave(lead)}
-            whatsappNumber={whatsappNumber}
-            saving={saving}
-          />
-        </div>
-
-        <div className="mt-4">
-          <ContactOutcomeBar lead={lead} onOutcome={(outcome) => onOutcome(lead, outcome, channel)} compact />
-        </div>
-
-        {postContactChannel && (
-          <PostContactPanel
-            lead={lead}
-            channel={postContactChannel}
-            onContacted={onPostContacted}
-            onNoResponse={onPostNoResponse}
-            onFollowUp={onPostFollowUp}
-            onNotInterested={onPostNotInterested}
-            onDismiss={onPostDismiss}
-          />
-        )}
-
-        <div className="sticky top-0 z-10 mt-5 -mx-4 overflow-x-auto overscroll-x-contain scroll-smooth border-y border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5 luma-drawer-tabstrip">
+        {/* Tabs (Fijo - fuera del scroll) */}
+        <div className="flex-shrink-0 border-b border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 sm:px-5 overflow-x-auto overscroll-x-contain scroll-smooth whitespace-nowrap luma-drawer-tabstrip">
           <div className="flex w-max min-w-full gap-2">
             {LEAD_DRAWER_TABS.map((tab) => (
               <button
@@ -2178,9 +2134,61 @@ function LeadDetailDrawer({
           </div>
         </div>
 
-        <div className="mt-5 min-w-0 overflow-x-hidden">{renderTabContent()}</div>
+        {/* Body (Con scroll independiente) */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
+          <div className="mt-2">
+            <LeadCommercialSummary lead={lead} channel={channel} />
+          </div>
 
-        <div className="mt-5 flex min-w-0 flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="mt-4">
+            <LeadPrimaryActions
+              whatsappNumber={whatsappNumber}
+              saving={saving}
+              onCopyMessage={() => onCopyMessage(lead)}
+              onOpenWhatsApp={() => onOpenWhatsApp(lead)}
+              onMarkContacted={() => onUpdateStatus(lead, "contacted", channel)}
+              onMarkCall={() => onUpdateStatus(lead, "call", "llamada")}
+              onMarkProposalSent={() => onUpdateStatus(lead, "proposal_sent", channel)}
+              onNoResponse={() => onOutcome(lead, "no_response", channel)}
+              onNotInterested={() => onOutcome(lead, "not_interested", channel)}
+              onPause={() => onOutcome(lead, "pause", channel)}
+              onSave={() => onSave(lead)}
+            />
+          </div>
+
+          <div className="mt-4">
+            <LeadRecommendedMessagePanel
+              message={message}
+              onCopy={() => onCopyMessage(lead)}
+              onOpenWhatsApp={() => onOpenWhatsApp(lead)}
+              onOutcome={(outcome) => onOutcome(lead, outcome, channel)}
+              onSave={() => onSave(lead)}
+              whatsappNumber={whatsappNumber}
+              saving={saving}
+            />
+          </div>
+
+          <div className="mt-4">
+            <ContactOutcomeBar lead={lead} onOutcome={(outcome) => onOutcome(lead, outcome, channel)} compact />
+          </div>
+
+          {postContactChannel && (
+            <PostContactPanel
+              lead={lead}
+              channel={postContactChannel}
+              onContacted={onPostContacted}
+              onNoResponse={onPostNoResponse}
+              onFollowUp={onPostFollowUp}
+              onNotInterested={onPostNotInterested}
+              onDismiss={onPostDismiss}
+            />
+          )}
+
+          <div className="mt-5 min-w-0 overflow-x-hidden">{renderTabContent()}</div>
+        </div>
+
+        {/* Action bar (Footer fijo - siempre visible) */}
+        <div className="flex-shrink-0 flex min-w-0 flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5">
           <ActionButton icon={Copy} variant="gold" onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
           <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(whatsappNumber)}>Abrir WhatsApp</ActionButton>
           <OutcomeMenu onOutcome={(outcome) => onOutcome(lead, outcome, channel)} />
@@ -5185,7 +5193,8 @@ export function LumaOutreachConsole({
   };
 
   return (
-    <main className="min-h-screen bg-[var(--luma-void)] text-[var(--luma-ivory)]">
+    <main className="h-dvh w-full overflow-hidden flex flex-col lg:flex-row bg-[var(--luma-void)] text-[var(--luma-ivory)]">
+      {/* Mobile header (Fijo a nivel superior en pantallas móviles) */}
       <header className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.08] bg-[var(--luma-void)]/95 px-4 py-3 backdrop-blur-xl lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -5215,6 +5224,7 @@ export function LumaOutreachConsole({
         </div>
       </header>
 
+      {/* Menu Drawer Móvil */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
@@ -5231,7 +5241,7 @@ export function LumaOutreachConsole({
               role="dialog"
               aria-modal="true"
               aria-label="Navegacion movil"
-              className="fixed left-0 top-0 z-[60] flex h-dvh w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl lg:hidden"
+              className="fixed left-0 top-0 z-[60] flex h-dvh w-[min(22rem,calc(100vw-2rem))] flex-col overflow-y-auto border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl lg:hidden"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -5283,42 +5293,44 @@ export function LumaOutreachConsole({
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex w-full max-w-[1720px] gap-6 px-4 py-4 pt-24 lg:px-6 lg:pt-5 xl:py-5">
-        <aside className="sticky top-5 hidden h-[calc(100dvh-40px)] min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/[0.92] p-4 lg:flex">
-          <div className="rounded-lg border border-[#C7A45A]/[0.18] bg-[#C7A45A]/[0.08] p-4">
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-lg border border-[#C7A45A]/30 bg-black/20 text-[#F5D78C]">
-                <Sparkles size={19} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--luma-ivory)]">{workspaceConfig.brandName}</p>
-                <p className="text-xs text-[var(--luma-muted)]">by {workspaceConfig.companyName}</p>
-              </div>
+      {/* Sidebar Desktop (Fijo a la izquierda con scroll interno si desborda) */}
+      <aside className="hidden lg:flex flex-col shrink-0 w-72 h-dvh overflow-y-auto border-r border-white/[0.08] bg-[var(--luma-surface)] p-4 sticky top-0">
+        <div className="rounded-lg border border-[#C7A45A]/[0.18] bg-[#C7A45A]/[0.08] p-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-lg border border-[#C7A45A]/30 bg-black/20 text-[#F5D78C]">
+              <Sparkles size={19} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--luma-ivory)]">{workspaceConfig.brandName}</p>
+              <p className="text-xs text-[var(--luma-muted)]">by {workspaceConfig.companyName}</p>
             </div>
           </div>
+        </div>
 
-          <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setActiveView(item.key)}
-                className={cn("luma-nav-item", activeView === item.key && "luma-nav-item-active")}
-              >
-                <item.icon size={17} />
-                {item.label}
-              </button>
-            ))}
-          </nav>
+        <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setActiveView(item.key)}
+              className={cn("luma-nav-item", activeView === item.key && "luma-nav-item-active")}
+            >
+              <item.icon size={17} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
-          <div className="mt-5 rounded-lg border border-white/[0.08] bg-black/[0.14] p-4">
-            <p className="luma-kicker">Daily target</p>
-            <p className="mt-2 text-2xl font-semibold">{workspaceConfig.defaultDailyContactGoal}</p>
-            <p className="mt-1 text-xs text-[var(--luma-muted)]">contactos manuales, sin spam.</p>
-          </div>
-        </aside>
+        <div className="mt-5 rounded-lg border border-white/[0.08] bg-black/[0.14] p-4">
+          <p className="luma-kicker">Daily target</p>
+          <p className="mt-2 text-2xl font-semibold">{workspaceConfig.defaultDailyContactGoal}</p>
+          <p className="mt-1 text-xs text-[var(--luma-muted)]">contactos manuales, sin spam.</p>
+        </div>
+      </aside>
 
-        <div className="min-w-0 flex-1">
+      {/* Área de Contenido Principal (Scroll independiente, ocupa el espacio restante) */}
+      <div className="flex-1 min-w-0 h-dvh overflow-y-auto overflow-x-hidden px-4 py-4 pt-24 lg:px-6 lg:py-5 lg:pt-5 xl:py-5">
+        <div className="mx-auto w-full max-w-[1400px]">
           <header className="luma-hero">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-2">
