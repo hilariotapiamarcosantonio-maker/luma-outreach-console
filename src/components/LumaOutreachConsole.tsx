@@ -187,17 +187,17 @@ const NAV_ITEMS: Array<{ key: ViewKey; label: string; icon: LucideIcon }> = [
   { key: "followup", label: "Seguimiento", icon: MessagesSquare },
   { key: "calls", label: "Llamadas", icon: Phone },
   { key: "proposals", label: "Propuestas", icon: FileSpreadsheet },
-  { key: "review", label: "Revision", icon: AlertTriangle },
+  { key: "review", label: "Revisión", icon: AlertTriangle },
   { key: "import", label: "Importar", icon: FileUp },
-  { key: "settings", label: "Configuracion", icon: Settings2 },
+  { key: "settings", label: "Configuración", icon: Settings2 },
 ];
 
 const STATUS_ACTIONS: Array<{ status: ContactStatus; label: string }> = [
   { status: "contacted", label: "Contactado" },
-  { status: "replied", label: "Respondio" },
+  { status: "replied", label: "Respondió" },
   { status: "interested", label: "Interesado" },
   { status: "follow_up", label: "Seguimiento" },
-  { status: "sin_accion_por_ahora", label: "Sin accion por ahora" },
+  { status: "sin_accion_por_ahora", label: "Sin acción por ahora" },
   { status: "call", label: "Llamada" },
   { status: "proposal_sent", label: "Propuesta enviada" },
   { status: "not_interested", label: "No interesado" },
@@ -216,17 +216,17 @@ const CONTACT_OUTCOME_DEFINITIONS: Array<{
 }> = [
   {
     key: "responded",
-    label: "Respondi\u00f3",
+    label: "Respondió",
     status: "replied",
     responseType: "Pendiente de clasificar",
-    nextStep: "Calificar interes y proponer llamada corta",
+    nextStep: "Calificar interés y proponer llamada corta",
     incrementContactCount: true,
     icon: CheckCircle2,
     variant: "gold",
   },
   {
     key: "no_response",
-    label: "No respondi\u00f3",
+    label: "No respondió",
     status: "follow_up",
     responseType: "Sin respuesta",
     nextStep: "Hacer seguimiento",
@@ -259,16 +259,16 @@ const CONTACT_OUTCOME_DEFINITIONS: Array<{
     label: "No interesado",
     status: "not_interested",
     responseType: "No interesado",
-    nextStep: "Excluir de proximos lotes",
+    nextStep: "Excluir de próximos lotes",
     incrementContactCount: true,
     icon: XCircle,
     variant: "danger",
   },
   {
     key: "pause",
-    label: "Sin acci\u00f3n por ahora",
+    label: "Sin acción por ahora",
     status: "sin_accion_por_ahora",
-    responseType: "Sin acci\u00f3n",
+    responseType: "Sin acción",
     nextStep: "Pausa temporal; no descartar el lead",
     incrementContactCount: false,
     icon: ShieldCheck,
@@ -276,8 +276,8 @@ const CONTACT_OUTCOME_DEFINITIONS: Array<{
 ];
 
 const CONTACT_OUTCOME_HELP = [
-  "Sin acci\u00f3n por ahora: pausa temporal, no descarta el lead.",
-  "No interesado: excluir de proximos lotes.",
+  "Sin acción por ahora: pausa temporal, no descarta el lead.",
+  "No interesado: excluir de próximos lotes.",
   "Seguimiento: volver a contactar en fecha programada.",
   "Contactado sin respuesta: contacto realizado, pendiente seguimiento.",
 ];
@@ -638,9 +638,9 @@ function sheetStatusLabel(status: unknown) {
     failed: "Pendiente",
     contacted: "Contactado",
     contactado: "Contactado",
-    replied: "Respondi\u00f3",
-    respondio: "Respondi\u00f3",
-    interested: "Respondi\u00f3",
+    replied: "Respondió",
+    respondio: "Respondió",
+    interested: "Respondió",
     follow_up: "Seguimiento",
     seguimiento: "Seguimiento",
     call: "Llamada",
@@ -657,7 +657,7 @@ function sheetStatusLabel(status: unknown) {
     no_interesado: "No interesado",
     referred: "Referido",
     referido: "Referido",
-    sin_accion_por_ahora: "Sin acci\u00f3n por ahora",
+    sin_accion_por_ahora: "Sin acción por ahora",
     discarded: "Descartado",
     descartado: "Descartado",
   };
@@ -675,13 +675,13 @@ function sheetSafeLeadPatch(patch: Partial<Contact>) {
 function sheetSaveToastMessage(lead: Contact, patch: Partial<Contact>) {
   const status = sheetStatusLabel(patch.status ?? patch.estado ?? lead.status);
   const responseType = String(patch.tipo_respuesta ?? lead.tipo_respuesta ?? "Sin clasificar");
-  const nextStep = String(patch.proximo_paso ?? patch.nextStep ?? lead.proximo_paso ?? lead.nextStep ?? "Sin proximo paso");
+  const nextStep = String(patch.proximo_paso ?? patch.nextStep ?? lead.proximo_paso ?? lead.nextStep ?? "Sin próximo paso");
   return [
     "Guardado en Google Sheets",
     `Lead: ${getLeadBusinessName(lead)}`,
     `Estado: ${status}`,
     `Tipo de respuesta: ${responseType}`,
-    `Pr\u00f3ximo paso: ${nextStep}`,
+    `Próximo paso: ${nextStep}`,
   ].join("\n");
 }
 
@@ -927,7 +927,7 @@ function Badge({
   className?: string;
 }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold", className)}>
+    <span className={cn("inline-flex max-w-full min-w-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold break-words", className)}>
       {children}
     </span>
   );
@@ -1020,7 +1020,7 @@ function ActionButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition sm:min-h-9",
+        "inline-flex min-h-11 max-w-full min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-xs font-semibold leading-snug transition sm:min-h-9 sm:py-1.5",
         "disabled:cursor-not-allowed disabled:opacity-40",
         variant === "gold"
           ? "border-[#C7A45A]/40 bg-[#C7A45A]/[0.14] text-[#F5D78C] hover:bg-[#C7A45A]/20"
@@ -1030,8 +1030,8 @@ function ActionButton({
         className,
       )}
     >
-      {Icon && <Icon size={14} />}
-      {children}
+      {Icon && <Icon size={14} className="shrink-0" />}
+      <span className="min-w-0 break-words">{children}</span>
     </button>
   );
 }
@@ -1072,10 +1072,10 @@ function ContactFieldBlock({
   breakAll?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
       <p className="luma-kicker">{title}</p>
       <CompactValue value={value} breakAll={breakAll} />
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex min-w-0 flex-wrap gap-2">
         {actionLabel && onAction && (
           <ActionButton icon={ExternalLink} onClick={onAction} disabled={actionDisabled}>
             {actionLabel}
@@ -1110,23 +1110,23 @@ function PostContactPanel({
 }) {
   const isWhatsApp = channel === "whatsapp";
   return (
-    <div className="mt-4 rounded-lg border border-[#C7A45A]/30 bg-[#C7A45A]/[0.08] p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="luma-kicker">Confirmacion post-contacto</p>
+    <div className="mt-4 min-w-0 overflow-hidden rounded-lg border border-[#C7A45A]/30 bg-[#C7A45A]/[0.08] p-4">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="luma-kicker">Confirmación post-contacto</p>
           <h4 className="mt-2 text-base font-semibold text-[var(--luma-ivory)]">
-            {isWhatsApp ? "WhatsApp abierto. Que paso?" : `${CHANNEL_LABELS[channel] || "Canal"} abierto. Que paso?`}
+            {isWhatsApp ? "WhatsApp abierto. ¿Qué pasó?" : `${CHANNEL_LABELS[channel] || "Canal"} abierto. ¿Qué pasó?`}
           </h4>
           <p className="mt-1 text-sm text-[var(--luma-muted)]">
             Canal abierto: {CHANNEL_LABELS[channel] || channel}. No se marca nada hasta que confirmes.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           <ActionButton icon={CheckCircle2} variant="gold" onClick={onContacted}>
             Contactado
           </ActionButton>
           <ActionButton icon={XCircle} onClick={onNoResponse}>
-            No respondi\u00f3
+            No respondió
           </ActionButton>
           <ActionButton icon={CalendarClock} onClick={onFollowUp}>
             Programar seguimiento
@@ -1134,7 +1134,7 @@ function PostContactPanel({
           <ActionButton icon={XCircle} variant="danger" onClick={onNotInterested}>
             No interesado
           </ActionButton>
-          <ActionButton onClick={onDismiss}>No todavia</ActionButton>
+          <ActionButton onClick={onDismiss}>No todavía</ActionButton>
         </div>
       </div>
       <p className="mt-3 truncate text-xs text-white/45">{getLeadBusinessName(lead)}</p>
@@ -1158,7 +1158,7 @@ function ProposalSnapshot({
   const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
   const demo = getLeadDemo(lead);
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
       <InfoBlock title="Oferta" value={getLeadOffer(lead)} />
       <InfoBlock title="Ticket" value={getLeadTicket(lead)} />
       <ContactFieldBlock
@@ -1181,7 +1181,7 @@ function ProposalSnapshot({
         copyDisabled={!hasValue(lead.propuesta_link)}
         breakAll
       />
-      <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
+      <InfoBlock title="Próximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
       <InfoBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."} />
       <div className="md:col-span-2 xl:col-span-4">
         <ActionButton icon={Copy} onClick={onCopySummary}>
@@ -1205,17 +1205,17 @@ function TextPreviewBlock({
 }) {
   const cleanValue = hasValue(value) ? String(value).trim() : "Sin dato registrado.";
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
+      <div className="flex min-w-0 items-center justify-between gap-3">
         <p className="luma-kicker">{title}</p>
         <button type="button" onClick={onCopy} className="text-white/[0.45] transition hover:text-[var(--luma-gold)]">
           <Copy size={14} />
         </button>
       </div>
-      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
-      <details className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+      <p className="mt-3 line-clamp-2 break-words text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
+      <details className="mt-3 min-w-0 overflow-x-hidden rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
         <summary className="cursor-pointer text-xs font-semibold text-[#F5D78C]">{actionLabel}</summary>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--luma-muted)]">{cleanValue}</p>
         <button type="button" onClick={onCopy} className="mt-3 text-xs font-semibold text-[#F5D78C]">
           Copiar completo
         </button>
@@ -1238,7 +1238,7 @@ function buildProposalSummary(lead: Contact) {
     `Canal usado: ${CHANNEL_LABELS[channel] || channel}`,
     `Fecha: ${formatDate(lead.fecha_propuesta)}`,
     `Estado actual: ${statusLabel(lead.status)}`,
-    `Proximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
+    `Próximo paso: ${lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."}`,
     `Link propuesta: ${visibleValue(lead.propuesta_link)}`,
     `Notas: ${lead.conversation_summary || lead.notas || lead.notes || "Sin nota comercial."}`,
   ].join("\n");
@@ -1296,7 +1296,7 @@ function CommercialSummaryItem({ label, value }: { label: string; value: string 
 
 function LeadCommercialSummary({ lead, channel }: { lead: Contact; channel: RecommendedChannel }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <CommercialSummaryItem label="Estado actual" value={statusLabel(lead.status)} />
       <CommercialSummaryItem label="Prioridad" value={cleanLeadValue(lead.prioridad || lead.priority) || "Sin prioridad"} />
       <CommercialSummaryItem label="Canal recomendado" value={CHANNEL_LABELS[channel] || String(channel)} />
@@ -1311,8 +1311,8 @@ function LeadNextStepCard({ lead }: { lead: Contact }) {
   const followupDate = formatDate(lead.followup_due_date || lead.fecha_seguimiento);
 
   return (
-    <div className="rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.07] px-3 py-3">
-      <p className="text-sm font-semibold text-[#F5D78C]">Proximo paso: {nextStep}</p>
+    <div className="min-w-0 overflow-hidden rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.07] px-3 py-3">
+      <p className="break-words text-sm font-semibold text-[#F5D78C]">Próximo paso: {nextStep}</p>
       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#F5D78C]/70">Fecha: {followupDate}</p>
     </div>
   );
@@ -1339,21 +1339,21 @@ function LeadRecommendedMessagePanel({
 }) {
   const cleanMessage = hasValue(message) ? String(message).trim() : "Sin mensaje recomendado.";
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <p className="luma-kicker">Mensaje recomendado</p>
-          <p className={cn("mt-2 text-sm leading-relaxed text-[var(--luma-muted)]", compact ? "line-clamp-2" : "line-clamp-3")}>
+          <p className={cn("mt-2 break-words text-sm leading-relaxed text-[var(--luma-muted)]", compact ? "line-clamp-2" : "line-clamp-3")}>
             {cleanMessage}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
+        <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
           <ActionButton icon={Copy} variant="gold" onClick={onCopy}>
             Copiar mensaje
           </ActionButton>
         </div>
       </div>
-      <details className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+      <details className="mt-3 min-w-0 overflow-x-hidden rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
         <summary className="cursor-pointer text-xs font-semibold text-[#F5D78C]">Ver mensaje completo</summary>
         <StickyActionRail
           whatsappNumber={whatsappNumber}
@@ -1365,7 +1365,8 @@ function LeadRecommendedMessagePanel({
           copyLabel="Copiar completo"
           className="mt-3"
         />
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--luma-muted)]">{cleanMessage}</p>
+        <OutcomeInlinePanel onOutcome={onOutcome} className="mt-3" />
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--luma-muted)]">{cleanMessage}</p>
         <StickyActionRail
           whatsappNumber={whatsappNumber}
           saving={saving}
@@ -1409,7 +1410,7 @@ function LeadPrimaryActions({
   onDetails?: () => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       <ActionButton icon={Copy} variant="gold" onClick={onCopyMessage} className="order-1">
         Copiar mensaje
       </ActionButton>
@@ -1432,7 +1433,7 @@ function LeadPrimaryActions({
         No interesado
       </ActionButton>
       <ActionButton icon={ShieldCheck} onClick={onPause} className="order-9 sm:order-8">
-        Sin acci\u00f3n
+        Sin acción
       </ActionButton>
       <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving} className="order-3 sm:order-9">
         Guardar en Sheets
@@ -1448,7 +1449,7 @@ function LeadPrimaryActions({
 
 function OutcomeButtonGroup({ onOutcome, compact = false }: { onOutcome: (outcome: ContactOutcomeKey) => void; compact?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       {CONTACT_OUTCOME_DEFINITIONS.map((outcome) => (
         <ActionButton
           key={outcome.key}
@@ -1464,6 +1465,23 @@ function OutcomeButtonGroup({ onOutcome, compact = false }: { onOutcome: (outcom
   );
 }
 
+function OutcomeInlinePanel({
+  onOutcome,
+  className,
+}: {
+  onOutcome: (outcome: ContactOutcomeKey) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0 overflow-hidden rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-3", className)}>
+      <p className="luma-kicker">¿Qué pasó con este contacto?</p>
+      <div className="mt-3">
+        <OutcomeButtonGroup onOutcome={onOutcome} compact />
+      </div>
+    </div>
+  );
+}
+
 function ContactOutcomeBar({
   lead,
   onOutcome,
@@ -1474,12 +1492,12 @@ function ContactOutcomeBar({
   compact?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+      <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
-          <p className="luma-kicker">Que paso con este contacto?</p>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--luma-muted)]">
-            Registra el resultado sin salir de {getLeadBusinessName(lead)}. Estado, tipo de respuesta y proximo paso se guardan separados.
+          <p className="luma-kicker">¿Qué pasó con este contacto?</p>
+          <p className="mt-2 break-words text-sm leading-relaxed text-[var(--luma-muted)]">
+            Registra el resultado sin salir de {getLeadBusinessName(lead)}. Estado, tipo de respuesta y próximo paso se guardan separados.
           </p>
         </div>
         <OutcomeButtonGroup onOutcome={onOutcome} compact={compact} />
@@ -1495,12 +1513,12 @@ function ContactOutcomeBar({
 
 function OutcomeMenu({ onOutcome }: { onOutcome: (outcome: ContactOutcomeKey) => void }) {
   return (
-    <details className="relative">
-      <summary className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white/70 transition hover:border-white/16 hover:bg-white/[0.07] sm:min-h-9">
-        <UserCheck size={14} />
-        Registrar resultado
+    <details className="relative min-w-0 max-w-full">
+      <summary className="inline-flex min-h-11 max-w-full cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-center text-xs font-semibold leading-snug text-white/70 transition hover:border-white/16 hover:bg-white/[0.07] sm:min-h-9 sm:py-1.5">
+        <UserCheck size={14} className="shrink-0" />
+        <span className="min-w-0 break-words">Registrar resultado</span>
       </summary>
-      <div className="mt-2 rounded-lg border border-white/[0.08] bg-[#121820] p-3 shadow-2xl">
+      <div className="mt-2 min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-[#121820] p-3 shadow-2xl">
         <OutcomeButtonGroup onOutcome={onOutcome} compact />
       </div>
     </details>
@@ -1529,7 +1547,7 @@ function StickyActionRail({
   return (
     <div
       className={cn(
-        "sticky top-2 z-20 flex flex-wrap gap-2 rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/95 p-2 backdrop-blur",
+        "flex min-w-0 flex-wrap gap-2 overflow-x-hidden rounded-lg border border-white/[0.08] bg-[var(--luma-surface)]/95 p-2 backdrop-blur",
         className,
       )}
     >
@@ -1623,15 +1641,15 @@ function LeadOperationalCard({
   const opportunity = getLeadOpportunity(lead);
   const pain = getLeadPain(lead);
   return (
-    <article className="luma-lead-card space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
-        <button type="button" onClick={onDetails} className="block max-w-full text-left">
+    <article className="luma-lead-card min-w-0 space-y-4 overflow-x-hidden">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
+        <button type="button" onClick={onDetails} className="block min-w-0 max-w-full text-left">
           <LeadIdentityHeader lead={lead} />
         </button>
         <LeadNextStepCard lead={lead} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/60">
           <input type="checkbox" checked={selected} onChange={onToggleSelection} className="h-4 w-4 accent-[#C7A45A]" />
           Seleccionar
@@ -1644,7 +1662,7 @@ function LeadOperationalCard({
 
       <LeadCommercialSummary lead={lead} channel={channel} />
 
-      <div className="flex flex-col gap-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.35]">WhatsApp visible</p>
         <p className="break-all text-sm font-semibold text-[var(--luma-ivory)]">{visibleValue(whatsappNumber)}</p>
       </div>
@@ -1690,15 +1708,15 @@ function LeadOperationalCard({
       />
 
       {variant === "proposal" && (
-        <div className="mt-4 rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+        <div className="mt-4 min-w-0 overflow-hidden rounded-lg border border-[#C7A45A]/25 bg-[#C7A45A]/[0.06] p-4">
+          <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
               <p className="luma-kicker">Pipeline comercial</p>
-              <p className="mt-2 text-sm leading-relaxed text-[#F5D78C]">
+              <p className="mt-2 break-words text-sm leading-relaxed text-[#F5D78C]">
                 {getLeadBusinessName(lead)} - {getLeadOffer(lead)} - {getLeadTicket(lead)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               <ActionButton icon={Copy} onClick={onCopyProposalSummary}>Copiar resumen</ActionButton>
               <ActionButton icon={ExternalLink} onClick={onOpenDemo}>Abrir demo</ActionButton>
               <ActionButton icon={Clipboard} variant="gold" onClick={onPrepareProposal}>Preparar propuesta</ActionButton>
@@ -1717,7 +1735,7 @@ function LeadOperationalCard({
               onCopyProposalLink={() => navigator.clipboard?.writeText(String(lead.propuesta_link || ""))}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">
             <ActionButton onClick={onSaveMaterialLink}>Guardar material/demo</ActionButton>
             <ActionButton icon={Save} variant="gold" onClick={onSave} disabled={saving}>
               Guardar en Sheets
@@ -1726,7 +1744,7 @@ function LeadOperationalCard({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 flex-wrap gap-2">
         <ActionButton onClick={onToggleMore}>{expanded ? "Ocultar datos" : "Ver datos"}</ActionButton>
         <ActionButton icon={Clipboard} onClick={onCopyContactData}>Copiar datos</ActionButton>
         <ActionButton icon={ExternalLink} onClick={onOpenDemo}>Abrir demo</ActionButton>
@@ -1738,7 +1756,7 @@ function LeadOperationalCard({
       </div>
 
       {expanded && (
-        <div className="space-y-4 rounded-lg border border-white/[0.08] bg-black/10 p-4">
+        <div className="min-w-0 space-y-4 overflow-x-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
           <StickyActionRail
             whatsappNumber={whatsappNumber}
             saving={saving}
@@ -1747,7 +1765,8 @@ function LeadOperationalCard({
             onOutcome={onOutcome}
             onSave={onSave}
           />
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ContactOutcomeBar lead={lead} onOutcome={onOutcome} compact />
+          <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ContactFieldBlock
               title="Instagram"
               value={visibleValue(lead.instagram)}
@@ -1786,29 +1805,29 @@ function LeadOperationalCard({
               copyDisabled={!hasValue(reportUrl || getReportDisplay(lead))}
               breakAll
             />
-            <InfoBlock title="Telefono" value={visibleValue(getLeadPhoneNumber(lead))} />
+            <InfoBlock title="Teléfono" value={visibleValue(getLeadPhoneNumber(lead))} />
             <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
-            <InfoBlock title="Senal comercial" value={signal} />
+            <InfoBlock title="Señal comercial" value={signal} />
             <InfoBlock title="Dolor probable" value={pain} />
             <InfoBlock title="Oportunidad visible" value={opportunity} />
             <InfoBlock title="Notas" value={notes || "Sin notas registradas."} />
             <InfoBlock title="Propuesta asociada" value={visibleValue(lead.propuesta_link)} />
-            <InfoBlock title="Angulo" value={lead.angulo_contacto || lead.contactAngle || "Angulo pendiente."} />
+            <InfoBlock title="Ángulo" value={lead.angulo_contacto || lead.contactAngle || "Ángulo pendiente."} />
             <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
-            <InfoBlock title="Ultimo canal" value={CHANNEL_LABELS[channel] || String(channel)} />
+            <InfoBlock title="Último canal" value={CHANNEL_LABELS[channel] || String(channel)} />
           </div>
-          <div className="grid gap-3 xl:grid-cols-[1fr_1fr]">
-            <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
               <p className="luma-kicker">Cambiar estado</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <ActionButton onClick={() => onUpdateStatus("replied", channel)}>Respondio</ActionButton>
+              <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+                <ActionButton onClick={() => onUpdateStatus("replied", channel)}>Respondió</ActionButton>
                 <ActionButton onClick={() => onUpdateStatus("follow_up", channel)}>Seguimiento</ActionButton>
                 <ActionButton onClick={() => onUpdateStatus("not_interested", channel)}>No interesado</ActionButton>
               </div>
             </div>
-            <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
               <p className="luma-kicker">Canal usado</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                 <ActionButton onClick={() => onAssignChannel("whatsapp")}>WhatsApp</ActionButton>
                 <ActionButton onClick={() => onAssignChannel("instagram")}>Instagram</ActionButton>
                 <ActionButton onClick={() => onAssignChannel("email")}>Email</ActionButton>
@@ -1820,7 +1839,7 @@ function LeadOperationalCard({
           <textarea
             defaultValue={notes}
             onBlur={(event) => onNotesBlur(event.target.value)}
-            placeholder="Nota comercial: respuesta, objecion, compromiso, siguiente accion..."
+            placeholder="Nota comercial: respuesta, objeción, compromiso, siguiente acción..."
             className="luma-input min-h-24 resize-y text-sm"
           />
           <StickyActionRail
@@ -1905,7 +1924,7 @@ function LeadDetailDrawer({
   const renderTabContent = () => {
     if (activeTab === "summary") {
       return (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <InfoBlock title="Nombre negocio" value={getLeadBusinessName(lead)} />
           <InfoBlock title="Persona" value={getLeadPersonName(lead)} />
           <InfoBlock title="Nicho" value={niche.shortLabel} />
@@ -1913,7 +1932,7 @@ function LeadDetailDrawer({
           <InfoBlock title="Ticket" value={getLeadTicket(lead)} />
           <InfoBlock title="Estado" value={statusLabel(lead.status)} />
           <InfoBlock title="Canal usado" value={CHANNEL_LABELS[channel] || String(channel)} />
-          <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir siguiente movimiento."} />
+          <InfoBlock title="Próximo paso" value={lead.proximo_paso || lead.nextStep || "Definir siguiente movimiento."} />
           <InfoBlock title="Fecha seguimiento" value={formatDate(lead.followup_due_date || lead.fecha_seguimiento)} />
         </div>
       );
@@ -1921,8 +1940,8 @@ function LeadDetailDrawer({
 
     if (activeTab === "contact") {
       return (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 space-y-4 overflow-x-hidden">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <ContactFieldBlock
               title="WhatsApp"
               value={visibleValue(whatsappNumber)}
@@ -1961,9 +1980,9 @@ function LeadDetailDrawer({
               breakAll
             />
           </div>
-          <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
             <p className="luma-kicker">Acciones manuales</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex min-w-0 flex-wrap gap-2">
               <ActionButton icon={Copy} onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
               <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(whatsappNumber)}>Abrir WhatsApp</ActionButton>
               <ActionButton icon={ExternalLink} onClick={() => onOpenInstagram(lead)} disabled={!hasValue(lead.instagram)}>Abrir Instagram</ActionButton>
@@ -1978,9 +1997,9 @@ function LeadDetailDrawer({
 
     if (activeTab === "message") {
       return (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
           <TextPreviewBlock title="Mensaje recomendado" value={message} onCopy={() => onCopyMessage(lead)} actionLabel="Ver mensaje" />
-          <TextPreviewBlock title="Senal comercial" value={getLeadSignal(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadSignal(lead))} />
+          <TextPreviewBlock title="Señal comercial" value={getLeadSignal(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadSignal(lead))} />
           <TextPreviewBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadOpportunity(lead))} />
           <TextPreviewBlock title="Dolor probable" value={getLeadPain(lead)} onCopy={() => navigator.clipboard?.writeText(getLeadPain(lead))} />
         </div>
@@ -1989,10 +2008,10 @@ function LeadDetailDrawer({
 
     if (activeTab === "followup") {
       return (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
             <p className="luma-kicker">Marcar avance</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex min-w-0 flex-wrap gap-2">
               <ActionButton onClick={() => onUpdateStatus(lead, "contacted", channel)}>Marcar contactado</ActionButton>
               <ActionButton onClick={() => onUpdateStatus(lead, "call", "llamada")}>Marcar llamada</ActionButton>
               <ActionButton variant="gold" onClick={() => onUpdateStatus(lead, "proposal_sent", channel)}>Marcar propuesta enviada</ActionButton>
@@ -2000,9 +2019,9 @@ function LeadDetailDrawer({
               <ActionButton variant="danger" onClick={() => onUpdateStatus(lead, "not_interested", channel)}>Marcar no interesado</ActionButton>
             </div>
           </div>
-          <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
             <p className="luma-kicker">Canal usado</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex min-w-0 flex-wrap gap-2">
               <ActionButton onClick={() => onAssignChannel(lead, "whatsapp")}>WhatsApp</ActionButton>
               <ActionButton onClick={() => onAssignChannel(lead, "instagram")}>Instagram</ActionButton>
               <ActionButton onClick={() => onAssignChannel(lead, "email")}>Email</ActionButton>
@@ -2011,14 +2030,14 @@ function LeadDetailDrawer({
             </div>
           </div>
           <InfoBlock title="Intentos" value={String(lead.attempt_count ?? lead.cantidad_contactos ?? lead.sentCount ?? 0)} />
-          <InfoBlock title="Ultima interaccion" value={formatDate(lead.last_interaction_date || lead.fecha_contacto || lead.lastContactDate)} />
+          <InfoBlock title="Última interacción" value={formatDate(lead.last_interaction_date || lead.fecha_contacto || lead.lastContactDate)} />
         </div>
       );
     }
 
     if (activeTab === "proposal") {
       return (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4 overflow-x-hidden">
           <ProposalSnapshot
             lead={lead}
             onOpenDemo={() => onOpenDemo(lead)}
@@ -2026,7 +2045,7 @@ function LeadDetailDrawer({
             onOpenProposalLink={() => window.open(proposalLink, "_blank", "noopener,noreferrer")}
             onCopyProposalLink={() => navigator.clipboard?.writeText(String(lead.propuesta_link || ""))}
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-2">
             <ActionButton icon={Clipboard} variant="gold" onClick={() => onPrepareProposal(lead)}>Preparar propuesta</ActionButton>
             <ActionButton onClick={() => onUpdateStatus(lead, "negotiating", channel)}>Negociacion activa</ActionButton>
             <ActionButton onClick={() => onUpdateStatus(lead, "closed", channel)}>Cerrado</ActionButton>
@@ -2038,7 +2057,7 @@ function LeadDetailDrawer({
 
     if (activeTab === "audit") {
       return (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <ContactFieldBlock
             title="Reporte Luma"
             value={getReportDisplay(lead)}
@@ -2062,7 +2081,7 @@ function LeadDetailDrawer({
     }
 
     return (
-      <div className="space-y-3">
+      <div className="min-w-0 space-y-3 overflow-x-hidden">
         <TextPreviewBlock
           title="Notas actuales"
           value={notes || "Sin notas registradas."}
@@ -2071,7 +2090,7 @@ function LeadDetailDrawer({
         <textarea
           defaultValue={notes}
           onBlur={(event) => onSaveNotes(lead, event.target.value)}
-          placeholder="Nota comercial: respuesta, objecion, compromiso, siguiente accion..."
+          placeholder="Nota comercial: respuesta, objeción, compromiso, siguiente acción..."
           className="luma-input min-h-36 resize-y text-sm"
         />
       </div>
@@ -2079,12 +2098,12 @@ function LeadDetailDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[80] overflow-hidden bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <aside
-        className="ml-auto flex h-dvh w-full max-w-none flex-col overflow-y-auto border-white/[0.1] bg-[var(--luma-surface)] p-4 shadow-2xl sm:max-w-3xl sm:border-l sm:p-5"
+        className="ml-auto flex h-dvh w-full max-w-none flex-col overflow-x-hidden overflow-y-auto border-white/[0.1] bg-[var(--luma-surface)] p-4 pb-6 shadow-2xl sm:max-w-3xl sm:border-l sm:p-5 sm:pb-8"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <LeadIdentityHeader lead={lead} compact />
           <button
             type="button"
@@ -2098,18 +2117,6 @@ function LeadDetailDrawer({
 
         <div className="mt-5">
           <LeadCommercialSummary lead={lead} channel={channel} />
-        </div>
-
-        <div className="mt-4">
-          <LeadRecommendedMessagePanel
-            message={message}
-            onCopy={() => onCopyMessage(lead)}
-            onOpenWhatsApp={() => onOpenWhatsApp(lead)}
-            onOutcome={(outcome) => onOutcome(lead, outcome, channel)}
-            onSave={() => onSave(lead)}
-            whatsappNumber={whatsappNumber}
-            saving={saving}
-          />
         </div>
 
         <div className="mt-4">
@@ -2129,6 +2136,18 @@ function LeadDetailDrawer({
         </div>
 
         <div className="mt-4">
+          <LeadRecommendedMessagePanel
+            message={message}
+            onCopy={() => onCopyMessage(lead)}
+            onOpenWhatsApp={() => onOpenWhatsApp(lead)}
+            onOutcome={(outcome) => onOutcome(lead, outcome, channel)}
+            onSave={() => onSave(lead)}
+            whatsappNumber={whatsappNumber}
+            saving={saving}
+          />
+        </div>
+
+        <div className="mt-4">
           <ContactOutcomeBar lead={lead} onOutcome={(outcome) => onOutcome(lead, outcome, channel)} compact />
         </div>
 
@@ -2144,8 +2163,8 @@ function LeadDetailDrawer({
           />
         )}
 
-        <div className="sticky top-0 z-10 mt-5 -mx-4 overflow-x-auto border-y border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
-          <div className="flex min-w-max gap-2">
+        <div className="sticky top-0 z-10 mt-5 -mx-4 overflow-x-hidden border-y border-white/[0.08] bg-[var(--luma-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
+          <div className="flex min-w-0 flex-wrap gap-2">
             {LEAD_DRAWER_TABS.map((tab) => (
               <button
                 key={tab.key}
@@ -2159,9 +2178,9 @@ function LeadDetailDrawer({
           </div>
         </div>
 
-        <div className="mt-5">{renderTabContent()}</div>
+        <div className="mt-5 min-w-0 overflow-x-hidden">{renderTabContent()}</div>
 
-        <div className="sticky bottom-0 z-20 mt-5 flex flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
+        <div className="mt-5 flex min-w-0 flex-wrap gap-2 border-t border-white/[0.08] bg-[var(--luma-surface)] py-4">
           <ActionButton icon={Copy} variant="gold" onClick={() => onCopyMessage(lead)}>Copiar mensaje</ActionButton>
           <ActionButton icon={MessageCircle} onClick={() => onOpenWhatsApp(lead)} disabled={!hasValue(whatsappNumber)}>Abrir WhatsApp</ActionButton>
           <OutcomeMenu onOutcome={(outcome) => onOutcome(lead, outcome, channel)} />
@@ -2246,7 +2265,7 @@ function PrepareProposalModal({
           <InfoBlock title="Ticket sugerido" value={getLeadTicket(lead)} />
           <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
           <InfoBlock title="Canal recomendado" value={CHANNEL_LABELS[channel] || String(channel)} />
-          <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
+          <InfoBlock title="Próximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
         </div>
 
         <div className="mt-5">
@@ -2259,7 +2278,7 @@ function PrepareProposalModal({
             <input
               value={link}
               onChange={(event) => onLinkChange(event.target.value)}
-              placeholder="Pega aqui el link de propuesta cuando exista"
+              placeholder="Pega aquí el link de propuesta cuando exista"
               className="luma-input mt-2"
             />
           </label>
@@ -2268,7 +2287,7 @@ function PrepareProposalModal({
             <textarea
               value={note}
               onChange={(event) => onNoteChange(event.target.value)}
-              placeholder="Nota de contexto, alcance o objecion para seguimiento"
+              placeholder="Nota de contexto, alcance u objeción para seguimiento"
               className="luma-input mt-2 min-h-24 resize-y text-sm"
             />
           </label>
@@ -2988,13 +3007,13 @@ export function LumaOutreachConsole({
       const defaultFollowupDate = addDaysDate(2);
       const nextStep =
         status === "replied" || status === "respondio"
-          ? "Calificar interes y proponer llamada corta"
+          ? "Calificar interés y proponer llamada corta"
           : status === "interested"
-            ? "Agendar llamada de diagnostico"
+            ? "Agendar llamada de diagnóstico"
             : status === "follow_up"
-              ? "Dar seguimiento con observacion concreta"
+              ? "Dar seguimiento con observación concreta"
               : status === "sin_accion_por_ahora"
-                ? "Sin accion por ahora; conservar sin contactar."
+                ? "Sin acción por ahora; conservar sin contactar."
               : status === "call" || status === "appointment"
                 ? "Preparar guion breve y oferta recomendada"
                 : status === "proposal_sent" || status === "propuesta_enviada"
@@ -3014,7 +3033,7 @@ export function LumaOutreachConsole({
                   : status === "not_interested"
                     ? "No interesado"
                     : status === "sin_accion_por_ahora"
-                      ? "Sin acci\u00f3n"
+                      ? "Sin acción"
                       : lead.tipo_respuesta;
 
       const patch: Partial<Contact> = {
@@ -3148,7 +3167,7 @@ export function LumaOutreachConsole({
         }),
         activeBatchName: batchName,
         activeBatchCreatedAt: now,
-        activeBatchSourceFile: "Seleccion manual",
+        activeBatchSourceFile: "Selección manual",
         activeBatchMainNiche: mainNiche,
         activeBatchLeadIds,
       },
@@ -3329,7 +3348,7 @@ export function LumaOutreachConsole({
 
       window.open(`tel:${phone}`, "_self");
       patchLead(lead.id, { ultimo_canal_usado: "llamada", last_channel: "llamada" }, { markDirty: false });
-      setToast({ message: "Telefono abierto para llamada manual.", type: "info" });
+      setToast({ message: "Teléfono abierto para llamada manual.", type: "info" });
     },
     [patchLead],
   );
@@ -3356,7 +3375,7 @@ export function LumaOutreachConsole({
         `Persona: ${getLeadPersonName(lead)}`,
         `Nicho: ${getNicheDefinition(resolveLeadNiche(lead)).shortLabel}`,
         `WhatsApp: ${visibleValue(getLeadWhatsAppNumber(lead))}`,
-        `Telefono: ${visibleValue(getLeadPhoneNumber(lead))}`,
+        `Teléfono: ${visibleValue(getLeadPhoneNumber(lead))}`,
         `Instagram: ${visibleValue(lead.instagram)}`,
         `Email: ${visibleValue(lead.correo || lead.email)}`,
         `LinkedIn: ${visibleValue(lead.linkedin)}`,
@@ -3880,7 +3899,7 @@ export function LumaOutreachConsole({
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <p className="luma-kicker">Seleccion rapida</p>
+          <p className="luma-kicker">Selección rápida</p>
           <p className="mt-2 text-sm text-[var(--luma-muted)]">
             {selectedLeadIdList.length} seleccionados. Vista actual: {label} ({leads.length} visibles).
           </p>
@@ -3890,7 +3909,7 @@ export function LumaOutreachConsole({
             Seleccionar visible
           </ActionButton>
           <ActionButton icon={XCircle} onClick={clearSelection} disabled={selectedLeadIdList.length === 0}>
-            Limpiar seleccion
+            Limpiar selección
           </ActionButton>
           <ActionButton icon={Flame} variant="gold" onClick={createBatchFromSelection} disabled={selectedLeadIdList.length === 0}>
             Crear lote
@@ -3902,7 +3921,7 @@ export function LumaOutreachConsole({
             Estado seguimiento
           </ActionButton>
           <ActionButton onClick={() => updateSelectedStatus("sin_accion_por_ahora")} disabled={selectedLeadIdList.length === 0}>
-            Sin accion
+            Sin acción
           </ActionButton>
           <ActionButton onClick={() => assignSelectedChannel("whatsapp")} disabled={selectedLeadIdList.length === 0}>
             Canal WhatsApp
@@ -3917,7 +3936,7 @@ export function LumaOutreachConsole({
             Canal manual
           </ActionButton>
           <ActionButton icon={Save} variant="gold" onClick={saveSelectedLeadsToSheets} disabled={selectedLeadIdList.length === 0 || sheetsSync.isSaving}>
-            Guardar seleccion
+            Guardar selección
           </ActionButton>
         </div>
       </div>
@@ -4063,7 +4082,7 @@ export function LumaOutreachConsole({
         {!compact && (
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <InfoBlock title="WhatsApp" value={visibleValue(whatsappNumber)} />
-            <InfoBlock title="Telefono" value={visibleValue(phoneNumber)} />
+            <InfoBlock title="Teléfono" value={visibleValue(phoneNumber)} />
             <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
             <InfoBlock title="Email" value={visibleValue(emailAddress)} />
             <InfoBlock title="LinkedIn" value={visibleValue(lead.linkedin)} />
@@ -4079,10 +4098,10 @@ export function LumaOutreachConsole({
 
         {!compact && (
           <div className="mt-5 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
-            <InfoBlock title="Senal comercial" value={getLeadSignal(lead)} />
+            <InfoBlock title="Señal comercial" value={getLeadSignal(lead)} />
             <InfoBlock title="Dolor probable" value={getLeadPain(lead)} />
             <InfoBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} />
-            <InfoBlock title="Oferta / angulo" value={`${getLeadOffer(lead)}\n${lead.angulo_contacto || lead.contactAngle || "Angulo pendiente."}`} />
+            <InfoBlock title="Oferta / ángulo" value={`${getLeadOffer(lead)}\n${lead.angulo_contacto || lead.contactAngle || "Ángulo pendiente."}`} />
             <InfoBlock title="Demo asociada" value={`${demo.label}\n${demo.url}`} />
             <InfoBlock title="Reporte Luma" value={getReportDisplay(lead)} />
           </div>
@@ -4116,14 +4135,14 @@ export function LumaOutreachConsole({
           <textarea
             defaultValue={notes}
             onBlur={(event) => saveLeadNotes(lead, event.target.value)}
-            placeholder="Nota local: respuesta, objecion, fecha prometida, siguiente accion..."
+            placeholder="Nota local: respuesta, objeción, fecha prometida, siguiente acción..."
             className="luma-input min-h-24 resize-y text-sm"
           />
           <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4 text-sm text-[var(--luma-muted)]">
-            <p className="luma-kicker">Proximo paso</p>
-            <p className="mt-2 text-[var(--luma-ivory)]">{lead.proximo_paso || lead.nextStep || "Definir despues del contacto."}</p>
+            <p className="luma-kicker">Próximo paso</p>
+            <p className="mt-2 text-[var(--luma-ivory)]">{lead.proximo_paso || lead.nextStep || "Definir después del contacto."}</p>
             <p className="mt-3 text-xs">Contactos: {lead.cantidad_contactos ?? lead.sentCount ?? 0}</p>
-            <p className="mt-1 text-xs">Ultimo canal: {lead.ultimo_canal_usado || "No registrado"}</p>
+            <p className="mt-1 text-xs">Último canal: {lead.ultimo_canal_usado || "No registrado"}</p>
           </div>
         </div>
       </article>
@@ -4170,9 +4189,9 @@ export function LumaOutreachConsole({
             <ActionButton icon={Mail} onClick={() => copyEmailManual(lead)} disabled={!hasValue(emailAddress)}>Email</ActionButton>
             <ActionButton icon={ExternalLink} onClick={() => window.open(reportUrl, "_blank", "noopener,noreferrer")} disabled={!hasValue(reportUrl)}>Reporte</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "contacted", channel)}>Contactado</ActionButton>
-            <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Respondio</ActionButton>
+            <ActionButton onClick={() => updateLeadStatus(lead, "replied", channel)}>Respondió</ActionButton>
             <ActionButton onClick={() => updateLeadStatus(lead, "follow_up", channel)}>Seguimiento</ActionButton>
-            <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", channel)}>Sin accion</ActionButton>
+            <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", channel)}>Sin acción</ActionButton>
             <ActionButton icon={Save} variant="gold" onClick={() => saveLeadToSheets(lead)}>Sheets</ActionButton>
           </div>
         </div>
@@ -4183,7 +4202,7 @@ export function LumaOutreachConsole({
   const renderProspectOperationalRow = (lead: Contact) => {
     const channel = getRecommendedChannel(lead);
     const expanded = Boolean(expandedLeadIds[lead.id]);
-    const nextStep = lead.proximo_paso || lead.nextStep || "Sin proximo paso.";
+    const nextStep = lead.proximo_paso || lead.nextStep || "Sin próximo paso.";
     return (
       <article key={lead.id} className="border-b border-white/[0.06] p-4 last:border-b-0">
         <div className="grid gap-4 xl:grid-cols-[1.15fr_0.9fr_1.4fr] xl:items-start">
@@ -4227,11 +4246,11 @@ export function LumaOutreachConsole({
               {renderStatusActions(lead, channel)}
             </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <InfoBlock title="Telefono" value={visibleValue(getLeadPhoneNumber(lead))} />
+              <InfoBlock title="Teléfono" value={visibleValue(getLeadPhoneNumber(lead))} />
               <InfoBlock title="LinkedIn" value={visibleValue(lead.linkedin)} />
               <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
               <InfoBlock title="Demo asociada" value={`${getLeadDemo(lead).label}\n${getLeadDemo(lead).url}`} />
-              <InfoBlock title="Senal comercial" value={getLeadSignal(lead)} />
+              <InfoBlock title="Señal comercial" value={getLeadSignal(lead)} />
               <InfoBlock title="Oportunidad visible" value={getLeadOpportunity(lead)} />
               <InfoBlock title="Notas" value={lead.conversation_summary || lead.notas || lead.notes || "Sin notas."} />
               <InfoBlock title="Origen" value={getLeadSourceLabel(lead)} />
@@ -4325,7 +4344,7 @@ export function LumaOutreachConsole({
       <SectionHeader
         kicker="Modelo multinicho"
         title={`${commercialFrontCount} frentes comerciales, una consola local`}
-        body="Cada nicho tiene oferta, ticket y pipeline propio. Si aun no tiene leads, queda listo para importar su CSV normalizado."
+        body="Cada nicho tiene oferta, ticket y pipeline propio. Si aún no tiene leads, queda listo para importar su CSV normalizado."
       />
       <div className="grid gap-4 xl:grid-cols-2">
         {nicheMetrics.map((niche) => (
@@ -4406,7 +4425,7 @@ export function LumaOutreachConsole({
 
             {niche.total === 0 ? (
               <div className="mt-5 rounded-lg border border-dashed border-white/10 p-5 text-sm text-[var(--luma-muted)]">
-                Sin leads cargados todavia. Importa un CSV normalizado para activar este nicho.
+                Sin leads cargados todavía. Importa un CSV normalizado para activar este nicho.
               </div>
             ) : (
               <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -4448,7 +4467,7 @@ export function LumaOutreachConsole({
           <MiniStat label="Interesados" value={todayStats.interested} />
           <MiniStat label="Seguimientos" value={todayStats.followups} />
           <MiniStat
-            label="Proximo contacto"
+            label="Próximo contacto"
             value={todayStats.nextLead ? `${getLeadBusinessName(todayStats.nextLead)} (${CHANNEL_LABELS[getRecommendedChannel(todayStats.nextLead)]})` : "Sin pendiente"}
           />
         </div>
@@ -4532,7 +4551,7 @@ export function LumaOutreachConsole({
           </div>
           <div className="flex flex-wrap gap-2">
             <SegmentButton active={reviewOnly} onClick={() => setReviewOnly((value) => !value)} icon={AlertTriangle}>
-              Revision
+              Revisión
             </SegmentButton>
             {(["priority", "status", "date"] as const).map((mode) => (
               <SegmentButton key={mode} active={sortMode === mode} onClick={() => setSortMode(mode)} icon={ArrowDownUp}>
@@ -4661,7 +4680,7 @@ export function LumaOutreachConsole({
         <SectionHeader
           kicker="Pipeline activo"
           title="Seguimiento"
-          body="Donde no se pierden conversaciones: proximo paso, fecha, canal, intentos y notas."
+          body="Donde no se pierden conversaciones: próximo paso, fecha, canal, intentos y notas."
         />
         <div className="luma-panel p-4">
           <div className="relative">
@@ -4676,7 +4695,7 @@ export function LumaOutreachConsole({
         </div>
         {renderSelectionToolbar(leads, "Seguimiento")}
         {leads.length === 0 ? (
-          <EmptyState icon={RefreshCw} title={followupSearch.trim() ? "No encontramos ese texto." : "Aun no hay leads en seguimiento."} body={followupSearch.trim() ? "Prueba con parte del apellido, telefono o Instagram." : "Marca contactados, respuestas o interesados desde el lote de hoy."} />
+          <EmptyState icon={RefreshCw} title={followupSearch.trim() ? "No encontramos ese texto." : "Aún no hay leads en seguimiento."} body={followupSearch.trim() ? "Prueba con parte del apellido, teléfono o Instagram." : "Marca contactados, respuestas o interesados desde el lote de hoy."} />
         ) : (
           <div className="space-y-4">
             {leads.map((lead) => renderOperationalLeadCard(lead))}
@@ -4724,7 +4743,7 @@ export function LumaOutreachConsole({
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
                   <InfoBlock title="Dolor probable" value={getLeadPain(lead)} />
                   <InfoBlock title="Oferta recomendada" value={getLeadOffer(lead)} />
-                  <InfoBlock title="Angulo de conversacion" value={lead.angulo_contacto || lead.contactAngle || "Conectar senal publica con impacto comercial."} />
+                  <InfoBlock title="Ángulo de conversación" value={lead.angulo_contacto || lead.contactAngle || "Conectar señal pública con impacto comercial."} />
                 </div>
               </article>
             ))}
@@ -4755,7 +4774,7 @@ export function LumaOutreachConsole({
         </div>
         <div className="mt-4 space-y-4">
           {laneLeads.length === 0 ? (
-            <EmptyState icon={FileSpreadsheet} title="Sin leads en esta etapa." body="Cuando cambie el estado o se guarde un link de propuesta, aparecera aqui." />
+            <EmptyState icon={FileSpreadsheet} title="Sin leads en esta etapa." body="Cuando cambie el estado o se guarde un link de propuesta, aparecerá aquí." />
           ) : (
             laneLeads.map((lead) => renderOperationalLeadCard(lead, "proposal"))
           )}
@@ -4804,9 +4823,9 @@ export function LumaOutreachConsole({
           </div>
         </div>
         {renderSelectionToolbar(leads, "Propuestas")}
-        {renderProposalLane("Propuestas por enviar", "Leads con interes, llamada, seguimiento o artefacto de propuesta preparado, pero aun no marcados como enviados.", proposalsToSend)}
+        {renderProposalLane("Propuestas por enviar", "Leads con interés, llamada, seguimiento o artefacto de propuesta preparado, pero aún no marcados como enviados.", proposalsToSend)}
         {renderProposalLane("Propuestas enviadas", "Propuestas ya enviadas que necesitan seguimiento claro, link, fecha, canal y siguiente paso.", proposalsSent)}
-        {renderProposalLane("Negociaciones activas", "Conversaciones abiertas despues de la propuesta; aqui viven objeciones, acuerdos y proximo movimiento.", activeNegotiations)}
+        {renderProposalLane("Negociaciones activas", "Conversaciones abiertas después de la propuesta; aquí viven objeciones, acuerdos y próximo movimiento.", activeNegotiations)}
         {closedOrLost.length > 0 && renderProposalLane("Cierres y perdidas", "Historial comercial para no mezclar negociaciones activas con resultados cerrados.", closedOrLost)}
       </section>
     );
@@ -4832,7 +4851,7 @@ export function LumaOutreachConsole({
       <section className="space-y-5">
         <SectionHeader
           kicker="Higiene comercial"
-          title="Revision"
+          title="Revisión"
           body="Separa motivos de revision sin castigar leads trabajables. Solo Instagram no es malo: requiere enfoque DM."
         />
         {leads.length === 0 ? (
@@ -4889,7 +4908,7 @@ export function LumaOutreachConsole({
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <ActionButton onClick={() => updateLeadStatus(lead, "follow_up", getRecommendedChannel(lead))}>Contactar luego</ActionButton>
-                            <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", getRecommendedChannel(lead))}>Sin accion por ahora</ActionButton>
+                            <ActionButton onClick={() => updateLeadStatus(lead, "sin_accion_por_ahora", getRecommendedChannel(lead))}>Sin acción por ahora</ActionButton>
                             <ActionButton onClick={() => updateLeadStatus(lead, "buscar_canal", "manual")}>Buscar canal manualmente</ActionButton>
                             <ActionButton onClick={() => updateLeadStatus(lead, "needs_review", "manual")}>Mantener en revision</ActionButton>
                             <ActionButton variant="danger" onClick={() => updateLeadStatus(lead, "discarded", "manual")}>Descartar</ActionButton>
@@ -4897,7 +4916,7 @@ export function LumaOutreachConsole({
                         </div>
                         <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                           <InfoBlock title="WhatsApp" value={visibleValue(getLeadWhatsAppNumber(lead))} />
-                          <InfoBlock title="Telefono" value={visibleValue(getLeadPhoneNumber(lead))} />
+                          <InfoBlock title="Teléfono" value={visibleValue(getLeadPhoneNumber(lead))} />
                           <InfoBlock title="Instagram" value={visibleValue(lead.instagram)} />
                           <InfoBlock title="Email" value={visibleValue(lead.correo || lead.email)} />
                           <InfoBlock title="LinkedIn" value={visibleValue(lead.linkedin)} />
@@ -5038,7 +5057,7 @@ export function LumaOutreachConsole({
     <section className="space-y-5">
       <SectionHeader
         kicker="Control Sheets"
-        title="Configuracion"
+        title="Configuración"
         body="Google Sheets es fuente de verdad. CSV y localStorage quedan como respaldo operativo."
       />
       <div className="grid gap-5 xl:grid-cols-2">
@@ -5108,7 +5127,7 @@ export function LumaOutreachConsole({
             <InfoBlock title="Demo" value={`${demo.label}\n${demo.url}`} />
             <InfoBlock title="Canal recomendado" value={CHANNEL_LABELS[channel] || String(channel)} />
             <InfoBlock title="Mensaje sugerido" value={message} />
-            <InfoBlock title="Proximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
+            <InfoBlock title="Próximo paso" value={lead.proximo_paso || lead.nextStep || "Definir seguimiento comercial."} />
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
@@ -5117,7 +5136,7 @@ export function LumaOutreachConsole({
               <input
                 value={proposalDraftLink}
                 onChange={(event) => setProposalDraftLink(event.target.value)}
-                placeholder="Pega aqui el link de propuesta cuando exista"
+                placeholder="Pega aquí el link de propuesta cuando exista"
                 className="luma-input mt-2"
               />
             </label>
@@ -5344,7 +5363,7 @@ export function LumaOutreachConsole({
                 </Badge>
                 {sheetsSync.lastSyncAt && (
                   <Badge className="border-white/10 bg-white/[0.04] text-white/60">
-                    Ultima sincronizacion: {formatLocalDateTime(sheetsSync.lastSyncAt)}
+                    Última sincronización: {formatLocalDateTime(sheetsSync.lastSyncAt)}
                   </Badge>
                 )}
                 {sheetsSync.isSaving && <Badge className="border-sky-300/20 bg-sky-300/10 text-sky-100">Guardando</Badge>}
@@ -5448,7 +5467,7 @@ export function LumaOutreachConsole({
 
 function InfoBlock({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
       <p className="luma-kicker">{title}</p>
       <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-[var(--luma-muted)]">{value}</p>
     </div>
@@ -5467,10 +5486,10 @@ function MessagePreview({
   secondaryAction?: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/10 p-4">
+      <div className="flex min-w-0 items-center justify-between gap-3">
         <p className="luma-kicker">{title}</p>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <button type="button" onClick={onCopy} className="text-white/[0.45] transition hover:text-[var(--luma-gold)]">
             <Copy size={14} />
           </button>
@@ -5481,7 +5500,7 @@ function MessagePreview({
           )}
         </div>
       </div>
-      <p className="mt-3 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-[var(--luma-muted)]">{value}</p>
+      <p className="mt-3 max-h-28 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--luma-muted)]">{value}</p>
     </div>
   );
 }
@@ -5571,7 +5590,7 @@ function ImportHistoryPanel({ history }: { history: ImportHistoryItem[] }) {
       <p className="luma-kicker">Historial de importaciones</p>
       <h3 className="mt-2 text-xl font-semibold text-[var(--luma-ivory)]">Archivos cargados en esta consola</h3>
       {history.length === 0 ? (
-        <p className="mt-4 text-sm text-[var(--luma-muted)]">Aun no hay importaciones confirmadas en localStorage.</p>
+        <p className="mt-4 text-sm text-[var(--luma-muted)]">Aún no hay importaciones confirmadas en localStorage.</p>
       ) : (
         <div className="mt-4 space-y-3">
           {history.slice(0, 8).map((item) => (
@@ -5682,8 +5701,8 @@ function WorkspaceSummary({
       <h3 className="mt-2 text-xl font-semibold text-[var(--luma-ivory)]">Ver dataset activo</h3>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <MiniStat label="Leads cargados" value={contacts.length} />
-        <MiniStat label="Ultimo modo" value={workspace?.lastImportMode ? (workspace.lastImportMode === "append" ? "Agregar" : "Reemplazar") : "Sin modo"} />
-        <MiniStat label="Ultimo archivo" value={workspace?.lastImportedFileName || "Sin importar"} />
+        <MiniStat label="Último modo" value={workspace?.lastImportMode ? (workspace.lastImportMode === "append" ? "Agregar" : "Reemplazar") : "Sin modo"} />
+        <MiniStat label="Último archivo" value={workspace?.lastImportedFileName || "Sin importar"} />
         <MiniStat
           label="Fecha importacion"
           value={formatLocalDateTime(workspace?.lastImportDate)}
