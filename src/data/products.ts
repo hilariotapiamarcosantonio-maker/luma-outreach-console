@@ -109,7 +109,7 @@ export const PRODUCT_CATALOG: ProductDefinition[] = [
     ticket: "RD$45,000 - RD$75,000",
     recurring: "RD$2,000/mes",
     nicheLabel: "Estetica / spas / odontologia / belleza",
-    applicableNiches: ["beauty"],
+    applicableNiches: ["beauty_spa"],
     demo: {
       label: "Santuario Estetica MVP",
       url: "https://santuario-estetica-mvp.vercel.app/",
@@ -132,7 +132,7 @@ export const PRODUCT_CATALOG: ProductDefinition[] = [
     ticket: "RD$55,000 - RD$85,000",
     recurring: "RD$2,500/mes",
     nicheLabel: "Tiendas / cosmeticos / productos fisicos",
-    applicableNiches: ["commerce", "beauty"],
+    applicableNiches: ["commerce", "beauty_spa"],
     demo: {
       label: "Luma Capilar",
       url: "https://luma-capilar-saa-s.vercel.app/",
@@ -275,7 +275,7 @@ export const DEFAULT_PRODUCT_BY_NICHE: Record<NicheKey, ProductKey> = {
   real_estate: "estate_foundation",
   developers: "estate_foundation",
   academy: "academia_os",
-  beauty: "beauty_os",
+  beauty_spa: "beauty_os",
   commerce: "commerce_os",
   route_products: "route_os",
   printing_graphics: "b2b_quote_os",

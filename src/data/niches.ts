@@ -30,7 +30,7 @@ export const NICHES: NicheDefinition[] = [
   nicheDefinition("real_estate", "Inmobiliarias / brokers / agentes", "Inmobiliarias"),
   nicheDefinition("developers", "Constructoras / desarrolladores / proyectos", "Desarrolladores"),
   nicheDefinition("academy", "Academias / cursos / talleres", "Academias"),
-  nicheDefinition("beauty", "Estetica / spas / odontologia / belleza", "Beauty / Spa"),
+  nicheDefinition("beauty_spa", "Estetica / spas / odontologia / belleza", "Beauty / Spa"),
   nicheDefinition("commerce", "Tiendas / cosmeticos / productos fisicos", "Commerce"),
   nicheDefinition("route_products", "Distribuidoras / rutas / operaciones de calle", "Route OS"),
   nicheDefinition("printing_graphics", "Imprentas / letreros / servicios graficos B2B", "Imprentas B2B"),

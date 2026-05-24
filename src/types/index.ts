@@ -2,7 +2,7 @@ export type NicheKey =
   | "real_estate"
   | "developers"
   | "academy"
-  | "beauty"
+  | "beauty_spa"
   | "commerce"
   | "route_products"
   | "printing_graphics"

@@ -167,6 +167,108 @@ export function inferNicheFromText(value: unknown, context: unknown[] = []): Nic
   const contextText = normalizeText(context.join(" "));
   const combined = `${niche} ${contextText}`;
 
+  // 1. Explicit niche matching (highest priority)
+  if (niche) {
+    if (
+      niche === "beauty_spa" ||
+      niche === "beauty" ||
+      niche === "spa" ||
+      niche === "estetica" ||
+      niche === "salon" ||
+      niche === "barberia" ||
+      niche === "belleza" ||
+      niche.includes("beauty & spa") ||
+      niche.includes("beauty spa") ||
+      niche.includes("odont")
+    ) {
+      return "beauty_spa";
+    }
+
+    if (
+      niche.includes("real_estate") ||
+      niche.includes("real estate") ||
+      niche.includes("inmobili") ||
+      niche.includes("broker") ||
+      niche.includes("agente") ||
+      niche.includes("plusval") ||
+      niche.includes("inmueble") ||
+      niche.includes("propiedad") ||
+      niche.includes("residencial") ||
+      niche.includes("turistico") ||
+      niche.includes("inversion")
+    ) {
+      return "real_estate";
+    }
+
+    if (niche.includes("developer") || niche.includes("construct") || niche.includes("desarroll")) {
+      return "developers";
+    }
+
+    if (niche.includes("academy") || niche.includes("academ") || niche.includes("curso") || niche.includes("taller")) {
+      return "academy";
+    }
+
+    if (
+      niche.includes("route") ||
+      niche.includes("ruta") ||
+      niche.includes("distrib") ||
+      niche.includes("despacho") ||
+      niche.includes("reparto") ||
+      niche.includes("chofer") ||
+      niche.includes("cobrador") ||
+      niche.includes("promotor")
+    ) {
+      return "route_products";
+    }
+
+    if (
+      niche.includes("commerce") ||
+      niche.includes("tienda") ||
+      niche.includes("retail") ||
+      niche.includes("ecommerce") ||
+      niche.includes("e commerce") ||
+      niche.includes("ropa") ||
+      niche.includes("calzado") ||
+      niche.includes("accesorio") ||
+      niche.includes("catalog") ||
+      niche.includes("producto") ||
+      niche.includes("cosmetic") ||
+      niche.includes("capilar")
+    ) {
+      return "commerce";
+    }
+
+    if (niche.includes("printing") || niche.includes("imprent") || niche.includes("graf") || niche.includes("letrero")) {
+      return "printing_graphics";
+    }
+
+    if (niche.includes("professional") || niche.includes("abogado") || niche.includes("contable") || niche.includes("fotograf") || niche.includes("consult")) {
+      return "professional_services";
+    }
+
+    if (niche.includes("b2b") || niche.includes("industrial") || niche.includes("seguridad") || niche.includes("limpieza") || niche.includes("logistica")) {
+      return "b2b_services";
+    }
+
+    if (niche.includes("content") || niche.includes("contenido") || niche.includes("receta") || niche.includes("blog") || niche.includes("infoproduct")) {
+      return "content_monetization";
+    }
+  }
+
+  // 2. Fuzzy text matching on context / combined text (excluding too-generic words like "comercial" from real_estate)
+  // We check specific niches first to avoid false-positive defaults to real_estate
+  if (
+    combined.includes("beauty") ||
+    combined.includes("belleza") ||
+    combined.includes("spa") ||
+    combined.includes("estetica") ||
+    combined.includes("salon") ||
+    combined.includes("barberia") ||
+    combined.includes("odont")
+  ) {
+    return "beauty_spa";
+  }
+
   if (
     combined.includes("real_estate") ||
     combined.includes("real estate") ||
@@ -179,7 +281,6 @@ export function inferNicheFromText(value: unknown, context: unknown[] = []): Nic
     combined.includes("propiedad") ||
     combined.includes("propiedades") ||
     combined.includes("residencial") ||
-    combined.includes("comercial") ||
     combined.includes("turistico") ||
     combined.includes("inversion") ||
     combined.includes("punta cana") ||
@@ -187,44 +288,61 @@ export function inferNicheFromText(value: unknown, context: unknown[] = []): Nic
   ) {
     return "real_estate";
   }
-  if (!niche) return "unknown";
-  if (niche.includes("developer") || niche.includes("construct") || niche.includes("desarroll")) return "developers";
-  if (niche.includes("academy") || niche.includes("academ") || niche.includes("curso") || niche.includes("taller")) return "academy";
-  if (niche.includes("beauty") || niche.includes("belleza") || niche.includes("spa") || niche.includes("odont")) return "beauty";
+
+  if (combined.includes("developer") || combined.includes("construct") || combined.includes("desarroll")) {
+    return "developers";
+  }
+
+  if (combined.includes("academy") || combined.includes("academ") || combined.includes("curso") || combined.includes("taller")) {
+    return "academy";
+  }
+
   if (
-    niche.includes("route") ||
-    niche.includes("ruta") ||
-    niche.includes("distrib") ||
-    niche.includes("despacho") ||
-    niche.includes("reparto") ||
-    niche.includes("chofer") ||
-    niche.includes("cobrador") ||
-    niche.includes("promotor")
+    combined.includes("route") ||
+    combined.includes("ruta") ||
+    combined.includes("distrib") ||
+    combined.includes("despacho") ||
+    combined.includes("reparto") ||
+    combined.includes("chofer") ||
+    combined.includes("cobrador") ||
+    combined.includes("promotor")
   ) {
     return "route_products";
   }
+
   if (
-    niche.includes("commerce") ||
-    niche.includes("tienda") ||
-    niche.includes("retail") ||
-    niche.includes("ecommerce") ||
-    niche.includes("e commerce") ||
-    niche.includes("ropa") ||
-    niche.includes("calzado") ||
-    niche.includes("accesorio") ||
-    niche.includes("catalog") ||
-    niche.includes("producto") ||
-    niche.includes("cosmetic") ||
-    niche.includes("capilar")
+    combined.includes("commerce") ||
+    combined.includes("tienda") ||
+    combined.includes("retail") ||
+    combined.includes("ecommerce") ||
+    combined.includes("e commerce") ||
+    combined.includes("ropa") ||
+    combined.includes("calzado") ||
+    combined.includes("accesorio") ||
+    combined.includes("catalog") ||
+    combined.includes("producto") ||
+    combined.includes("cosmetic") ||
+    combined.includes("capilar")
   ) {
     return "commerce";
   }
-  if (niche.includes("printing") || niche.includes("imprent") || niche.includes("graf") || niche.includes("letrero")) return "printing_graphics";
-  if (niche.includes("professional") || niche.includes("abogado") || niche.includes("contable") || niche.includes("fotograf") || niche.includes("consult")) {
+
+  if (combined.includes("printing") || combined.includes("imprent") || combined.includes("graf") || combined.includes("letrero")) {
+    return "printing_graphics";
+  }
+
+  if (combined.includes("professional") || combined.includes("abogado") || combined.includes("contable") || combined.includes("fotograf") || combined.includes("consult")) {
     return "professional_services";
   }
-  if (niche.includes("b2b") || niche.includes("industrial") || niche.includes("seguridad") || niche.includes("limpieza") || niche.includes("logistica")) return "b2b_services";
-  if (niche.includes("content") || niche.includes("contenido") || niche.includes("receta") || niche.includes("blog") || niche.includes("infoproduct")) return "content_monetization";
+
+  if (combined.includes("b2b") || combined.includes("industrial") || combined.includes("seguridad") || combined.includes("limpieza") || combined.includes("logistica")) {
+    return "b2b_services";
+  }
+
+  if (combined.includes("content") || combined.includes("contenido") || combined.includes("receta") || combined.includes("blog") || combined.includes("infoproduct")) {
+    return "content_monetization";
+  }
+
   return "unknown";
 }
 
@@ -430,7 +548,7 @@ export function getLeadProduct(lead: Contact): ProductDefinition {
   if (importedOffer.includes("industrial") || importedOffer === normalizeText("Luma B2B OS")) return getProductByKey("b2b_industrial_os");
   if (importedOffer.includes("professional")) return getProductByKey("professional_os");
   if (importedOffer.includes("content") || importedOffer.includes("monetization")) return getProductByKey("content_monetization_os");
-  if (importedOffer.includes("beauty")) return getProductByKey("beauty_os");
+  if (importedOffer.includes("beauty") || importedOffer.includes("beauty_spa")) return getProductByKey("beauty_os");
   if (importedOffer.includes("academ")) return getProductByKey("academia_os");
 
   if (isBrokerAgentWithoutWeb(lead)) return getProductByKey("estate_starter");
@@ -494,7 +612,7 @@ export function getLeadOpportunity(lead: Contact) {
   if (niche === "academy") {
     return "Organizar inscripcion, cupos, fechas, pagos y seguimiento para reducir friccion en WhatsApp.";
   }
-  if (niche === "beauty") {
+  if (niche === "beauty_spa") {
     return "Convertir consultas de Instagram/WhatsApp en citas mejor filtradas y con seguimiento.";
   }
   if (niche === "b2b_services" || niche === "printing_graphics" || niche === "route_products" || niche === "professional_services") {

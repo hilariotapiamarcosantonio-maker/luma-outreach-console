@@ -27,7 +27,7 @@ export const DEFAULT_WORKSPACE: WorkspaceConfig = {
     "real_estate",
     "developers",
     "academy",
-    "beauty",
+    "beauty_spa",
     "route_products",
     "printing_graphics",
     "professional_services",
