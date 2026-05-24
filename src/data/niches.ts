@@ -50,7 +50,21 @@ export const UNKNOWN_NICHE: NicheDefinition = {
   demoUrl: "https://marcos-portfolio-premium.vercel.app/",
 };
 
+export const ALL_NICHES_DEF: NicheDefinition = {
+  key: "all" as any,
+  label: "Todos los nichos",
+  shortLabel: "Todos los nichos",
+  productKey: "professional_os",
+  offer: "Todos los nichos",
+  ticket: "",
+  demoLabel: "",
+  demoUrl: "",
+};
+
 export function getNicheDefinition(value?: string | null) {
   const normalized = String(value ?? "").trim();
+  if (normalized === "all" || normalized === "") {
+    return ALL_NICHES_DEF;
+  }
   return NICHES.find((niche) => niche.key === normalized) ?? UNKNOWN_NICHE;
 }
