@@ -11,6 +11,8 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clipboard,
   ClipboardList,
   Copy,
@@ -1420,6 +1422,8 @@ function LeadPrimaryActions({
   onPause,
   onSave,
   onDetails,
+  hideStatusRow = false,
+  extraActions,
 }: {
   whatsappNumber: string;
   saving?: boolean;
@@ -1433,6 +1437,8 @@ function LeadPrimaryActions({
   onPause: () => void;
   onSave: () => void;
   onDetails?: () => void;
+  hideStatusRow?: boolean;
+  extraActions?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2.5 w-full">
@@ -1452,54 +1458,57 @@ function LeadPrimaryActions({
             Ver detalles
           </ActionButton>
         )}
+        {extraActions}
       </div>
 
       {/* Fila 2: Cambios rápidos de estado */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-2 border-t border-white/[0.04]">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mr-1 select-none">Marcar:</span>
-        <button
-          type="button"
-          onClick={onMarkContacted}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
-        >
-          Contactado
-        </button>
-        <button
-          type="button"
-          onClick={onMarkCall}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
-        >
-          Llamada
-        </button>
-        <button
-          type="button"
-          onClick={onMarkProposalSent}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-[#C7A45A]/10 bg-[#C7A45A]/[0.02] text-[#F5D78C]/70 hover:text-[#F5D78C] hover:bg-[#C7A45A]/10 hover:border-[#C7A45A]/25 transition duration-150 cursor-pointer"
-        >
-          Propuesta
-        </button>
-        <button
-          type="button"
-          onClick={onNoResponse}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
-        >
-          Sin resp.
-        </button>
-        <button
-          type="button"
-          onClick={onNotInterested}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-red-500/10 bg-red-500/[0.02] text-red-300/60 hover:text-red-300 hover:bg-red-500/10 hover:border-red-500/25 transition duration-150 cursor-pointer"
-        >
-          No int.
-        </button>
-        <button
-          type="button"
-          onClick={onPause}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
-        >
-          Sin acc.
-        </button>
-      </div>
+      {!hideStatusRow && (
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-2 border-t border-white/[0.04]">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mr-1 select-none">Marcar:</span>
+          <button
+            type="button"
+            onClick={onMarkContacted}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
+          >
+            Contactado
+          </button>
+          <button
+            type="button"
+            onClick={onMarkCall}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
+          >
+            Llamada
+          </button>
+          <button
+            type="button"
+            onClick={onMarkProposalSent}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-[#C7A45A]/10 bg-[#C7A45A]/[0.02] text-[#F5D78C]/70 hover:text-[#F5D78C] hover:bg-[#C7A45A]/10 hover:border-[#C7A45A]/25 transition duration-150 cursor-pointer"
+          >
+            Propuesta
+          </button>
+          <button
+            type="button"
+            onClick={onNoResponse}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
+          >
+            Sin resp.
+          </button>
+          <button
+            type="button"
+            onClick={onNotInterested}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-red-500/10 bg-red-500/[0.02] text-red-300/60 hover:text-red-300 hover:bg-red-500/10 hover:border-red-500/25 transition duration-150 cursor-pointer"
+          >
+            No int.
+          </button>
+          <button
+            type="button"
+            onClick={onPause}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] hover:border-white/10 transition duration-150 cursor-pointer"
+          >
+            Sin acc.
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1686,6 +1695,7 @@ function LeadOperationalCard({
   onPostDismiss: () => void;
 }) {
   const channel = (lead.last_channel || lead.ultimo_canal_usado || getRecommendedChannel(lead)) as RecommendedChannel;
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const niche = getNicheDefinition(resolveLeadNiche(lead));
   const demo = getLeadDemo(lead);
   const message = getChannelMessage(lead, channel);
@@ -1827,6 +1837,16 @@ function LeadOperationalCard({
         onPause={() => onOutcome("pause")}
         onSave={onSave}
         onDetails={onDetails}
+        hideStatusRow={true}
+        extraActions={
+          <ActionButton
+            icon={showMoreActions ? ChevronUp : ChevronDown}
+            onClick={() => setShowMoreActions(!showMoreActions)}
+            className="flex-1 sm:flex-initial"
+          >
+            Más acciones
+          </ActionButton>
+        }
       />
 
       {postContactChannel && (
@@ -1841,17 +1861,74 @@ function LeadOperationalCard({
         />
       )}
 
-      {/* Botones de Control de Card */}
-      <div className="flex min-w-0 flex-wrap gap-2 pt-2 border-t border-white/[0.04]">
-        <ActionButton onClick={onToggleMore} className="min-w-[110px]">
-          {expanded ? "Ocultar datos" : "Ver datos completos"}
-        </ActionButton>
-        <ActionButton icon={Clipboard} onClick={onCopyContactData}>Copiar datos</ActionButton>
-        <ActionButton icon={ExternalLink} onClick={onOpenDemo}>Abrir demo</ActionButton>
-        <ActionButton icon={ClipboardList} variant="gold" onClick={onPrepareProposal}>
-          Preparar propuesta
-        </ActionButton>
-      </div>
+      {/* Panel de "Más acciones" Colapsable */}
+      {showMoreActions && (
+        <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 space-y-3 mt-2 text-xs">
+          {/* Quick status transitions */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-2">Marcar rápido</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => onUpdateStatus("contacted", channel)}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] transition cursor-pointer"
+              >
+                Contactado
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateStatus("call", "llamada")}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] transition cursor-pointer"
+              >
+                Llamada
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateStatus("proposal_sent", channel)}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-[#C7A45A]/10 bg-[#C7A45A]/[0.02] text-[#F5D78C]/70 hover:text-[#F5D78C] hover:bg-[#C7A45A]/10 transition cursor-pointer"
+              >
+                Propuesta
+              </button>
+              <button
+                type="button"
+                onClick={() => onOutcome("no_response")}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] transition cursor-pointer"
+              >
+                Sin resp.
+              </button>
+              <button
+                type="button"
+                onClick={() => onOutcome("not_interested")}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-red-500/10 bg-red-500/[0.02] text-red-300/60 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer"
+              >
+                No int.
+              </button>
+              <button
+                type="button"
+                onClick={() => onOutcome("pause")}
+                className="px-2.5 py-1 text-[11px] font-medium rounded border border-white/5 bg-white/[0.02] text-white/60 hover:text-[var(--luma-ivory)] hover:bg-white/[0.06] transition cursor-pointer"
+              >
+                Sin acc.
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary buttons */}
+          <div className="pt-2 border-t border-white/[0.04]">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-2">Herramientas y Datos</p>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton onClick={onToggleMore} className="h-8 text-[11px] min-w-[110px]">
+                {expanded ? "Ocultar datos" : "Ver datos completos"}
+              </ActionButton>
+              <ActionButton icon={Clipboard} onClick={onCopyContactData} className="h-8 text-[11px]">Copiar datos</ActionButton>
+              <ActionButton icon={ExternalLink} onClick={onOpenDemo} className="h-8 text-[11px]">Abrir demo</ActionButton>
+              <ActionButton icon={ClipboardList} variant="gold" onClick={onPrepareProposal} className="h-8 text-[11px]">
+                Preparar propuesta
+              </ActionButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sección Expandida (Detalles extra bajo demanda) */}
       {expanded && (
@@ -2796,6 +2873,12 @@ export function LumaOutreachConsole({
     return { contacted, pending, responded, interested, followups, nextLead };
   }, [todayBatch]);
 
+  const uniqueNichesInTodayBatch = useMemo(() => {
+    return Array.from(new Set(todayBatch.map(resolveLeadNiche)));
+  }, [todayBatch]);
+
+  const hasMultipleNichesInTodayBatch = uniqueNichesInTodayBatch.length > 1;
+
   const visibleTodayBatch = useMemo(() => {
     const filteredByStatus =
       todayFilter === "pending"
@@ -2805,8 +2888,11 @@ export function LumaOutreachConsole({
           : todayFilter === "interested"
             ? todayBatch.filter((lead) => ["interested", "follow_up", "call", "appointment", "proposal_sent", "propuesta_enviada", "negotiating", "closed"].includes(lead.status))
             : todayBatch;
-    return filteredByStatus.filter((lead) => leadMatchesQuery(lead, todaySearch));
-  }, [todayBatch, todayFilter, todaySearch]);
+    const filteredByNiche = nicheFilter !== "all"
+      ? filteredByStatus.filter((lead) => resolveLeadNiche(lead) === nicheFilter)
+      : filteredByStatus;
+    return filteredByNiche.filter((lead) => leadMatchesQuery(lead, todaySearch));
+  }, [todayBatch, todayFilter, todaySearch, nicheFilter]);
 
   const getLeadImportDate = useCallback(
     (lead: Contact) => lead.imported_at || lead.active_batch_created_at || (lead.imported_file_name === state.workspace?.lastImportedFileName ? state.workspace?.lastImportDate : undefined),
@@ -2877,6 +2963,75 @@ export function LumaOutreachConsole({
     if (reviewOnly) labels.push("Solo revision");
     return labels;
   }, [channelFilter, dateFilter, nicheFilter, priorityFilter, quickFilter, reviewOnly, search, statusFilter]);
+
+  const VIEW_LABELS: Record<ViewKey, string> = {
+    command: "Command Center",
+    nichos: "Nichos",
+    today: "Lote de Hoy",
+    prospects: "Prospectos",
+    followup: "Seguimiento",
+    calls: "Llamadas",
+    proposals: "Propuestas",
+    review: "Review",
+    import: "Importar leads",
+    settings: "Configuración",
+  };
+
+  const visibleLeadsCount = useMemo(() => {
+    if (activeView === "today") return visibleTodayBatch.length;
+    if (activeView === "prospects") return filteredLeads.length;
+    if (activeView === "followup") {
+      return contacts
+        .filter((lead) => FOLLOW_UP_STATUSES.has(lead.status))
+        .filter((lead) => leadMatchesQuery(lead, followupSearch)).length;
+    }
+    if (activeView === "proposals") {
+      const proposalReadyStatuses = new Set<ContactStatus>(["interested", "follow_up", "call", "appointment", "diagnostico", "reunion_pendiente"]);
+      const hasProposalArtifact = (lead: Contact) =>
+        hasValue(lead.propuesta_link) || hasValue(lead.material_link) || hasValue(lead.fecha_propuesta) || hasValue(lead.decision_status);
+      return contacts
+        .filter((lead) => (PROPOSAL_STATUSES.has(lead.status) || hasProposalArtifact(lead) || proposalReadyStatuses.has(lead.status)))
+        .filter((lead) => leadMatchesQuery(lead, proposalSearch)).length;
+    }
+    if (activeView === "calls") {
+      return contacts.filter((lead) => CALL_STATUSES.has(lead.status)).length;
+    }
+    if (activeView === "review") {
+      return contacts.filter(isReviewLead).length;
+    }
+    return null;
+  }, [activeView, visibleTodayBatch, filteredLeads, contacts, followupSearch, proposalSearch]);
+
+  const activeFiltersLabel = useMemo(() => {
+    const labels: string[] = [];
+    if (activeView === "prospects") {
+      if (search.trim()) labels.push(`Buscar: "${search.trim()}"`);
+      if (nicheFilter !== "all") labels.push(`Nicho: ${getNicheDefinition(nicheFilter).shortLabel}`);
+      if (priorityFilter !== "all") labels.push(`Prioridad: ${priorityFilter}`);
+      if (channelFilter !== "all") labels.push(`Canal: ${CHANNEL_LABELS[channelFilter]}`);
+      if (quickFilter !== "all") labels.push(`Filtro rápido: ${QUICK_FILTER_LABELS[quickFilter]}`);
+      if (statusFilter !== "all") labels.push(`Estado: ${statusLabel(statusFilter)}`);
+      if (dateFilter !== "all") labels.push(`Fecha: ${DATE_FILTER_LABELS[dateFilter]}`);
+      if (reviewOnly) labels.push("Solo revisión");
+    } else if (activeView === "today") {
+      if (todaySearch.trim()) labels.push(`Buscar: "${todaySearch.trim()}"`);
+      if (todayFilter !== "all") {
+        const todayFilterNames: Record<string, string> = {
+          pending: "Solo pendientes",
+          contacted: "Ver contactados",
+          interested: "Ver interesados",
+        };
+        labels.push(todayFilterNames[todayFilter] || todayFilter);
+      }
+      if (nicheFilter !== "all") labels.push(`Nicho: ${getNicheDefinition(nicheFilter).shortLabel}`);
+    } else if (activeView === "followup") {
+      if (followupSearch.trim()) labels.push(`Buscar: "${followupSearch.trim()}"`);
+    } else if (activeView === "proposals") {
+      if (proposalSearch.trim()) labels.push(`Buscar: "${proposalSearch.trim()}"`);
+    }
+    return labels.length > 0 ? labels.join(" · ") : "Ninguno";
+  }, [activeView, search, nicheFilter, priorityFilter, channelFilter, quickFilter, statusFilter, dateFilter, reviewOnly, todaySearch, todayFilter, followupSearch, proposalSearch]);
+
 
   const clearFilters = useCallback(() => {
     setSearch("");
@@ -4477,10 +4632,10 @@ export function LumaOutreachConsole({
               </div>
               <div className="flex gap-2">
                 <ActionButton icon={Flame} onClick={() => { setNicheFilter(niche.key); setActiveView("today"); }}>
-                  Ver lote
+                  Trabajar este nicho
                 </ActionButton>
                 <ActionButton icon={FileUp} onClick={() => { setActiveView("import"); importInputRef.current?.click(); }}>
-                  Importar leads
+                  Cargar leads a este nicho
                 </ActionButton>
               </div>
             </div>
@@ -4564,9 +4719,9 @@ export function LumaOutreachConsole({
   const renderToday = () => (
     <section className="space-y-5">
       <SectionHeader
-        kicker="Operacion diaria"
+        kicker="Lista de trabajo diaria"
         title="Lote de Hoy"
-        body={`Trabaja ${workspaceConfig.defaultDailyContactGoal} contactos manuales. Copia, abre canal, conversa, marca estado y deja nota. La consola no envia por ti.`}
+        body={`Tu lista de trabajo seleccionada para hoy. Enfócate en contactar a estos leads paso a paso.`}
       />
       <div className="luma-panel p-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -4628,11 +4783,28 @@ export function LumaOutreachConsole({
       </div>
       {renderBatchSummary()}
       {renderSelectionToolbar(visibleTodayBatch, "Lote de Hoy")}
+      {todayBatch.length > 0 && hasMultipleNichesInTodayBatch && nicheFilter === "all" && (
+        <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100 flex items-center gap-3">
+          <AlertTriangle className="text-amber-300 shrink-0" size={18} />
+          <div>
+            <p className="font-semibold">Este lote contiene leads de varios nichos.</p>
+            <p className="text-xs text-amber-100/75 mt-0.5">Puedes usar el filtro de nicho en la barra superior o en Prospectos para enfocar tu trabajo diario.</p>
+          </div>
+        </div>
+      )}
+      {todayBatch.length > 0 && nicheFilter !== "all" && (
+        <div className="rounded-lg border border-[#C7A45A]/20 bg-[#C7A45A]/[0.06] p-4 text-sm text-[#F5D78C] flex items-center gap-3">
+          <Sparkles className="text-[#F5D78C] shrink-0" size={18} />
+          <div>
+            <p className="font-semibold">Mostrando solo leads de {getNicheDefinition(nicheFilter).shortLabel}.</p>
+          </div>
+        </div>
+      )}
       {todayBatch.length === 0 ? (
         <EmptyState
           icon={Flame}
-          title="No hay lote cargado."
-          body="Importa un lote CSV/XLSX desde tu equipo para comenzar."
+          title="No hay lote de hoy activo."
+          body="Crea un lote de hoy desde Prospectos o desde un nicho."
         />
       ) : (
         <div className="space-y-3">
@@ -4651,7 +4823,7 @@ export function LumaOutreachConsole({
       <SectionHeader
         kicker="Base completa"
         title="Prospectos"
-        body="Base operativa para buscar, contactar, cambiar estado, preparar propuesta y guardar sin salir de Prospectos."
+        body="Consulta y busca en toda la base de datos de leads registrados en el sistema."
       />
 
       <div className="luma-panel p-5">
@@ -4794,9 +4966,9 @@ export function LumaOutreachConsole({
     return (
       <section className="space-y-5">
         <SectionHeader
-          kicker="Pipeline activo"
+          kicker="Leads para volver a contactar"
           title="Seguimiento"
-          body="Donde no se pierden conversaciones: próximo paso, fecha, canal, intentos y notas."
+          body="Leads contactados que requieren atención continua, respuestas o agendar próximos pasos."
         />
         <div className="luma-panel p-4">
           <div className="relative">
@@ -4903,9 +5075,9 @@ export function LumaOutreachConsole({
     return (
       <section className="space-y-5">
         <SectionHeader
-          kicker="High-ticket"
+          kicker="Pipeline comercial"
           title="Propuestas"
-          body="Propuestas de implementacion Luma Premium: oferta, ticket, siguiente paso y material comercial. No es una seccion para presentar propiedades."
+          body="Visualización y control de las propuestas comerciales y estados de cierre (enviado, negociación, cerrado)."
         />
         <div className="luma-panel p-4">
           <div className="relative">
@@ -5465,6 +5637,39 @@ export function LumaOutreachConsole({
       {/* Área de Contenido Principal (Scroll independiente, ocupa el espacio restante) */}
       <div className="flex-1 min-w-0 h-dvh overflow-y-auto overflow-x-hidden px-4 py-4 pt-24 lg:px-6 lg:py-5 lg:pt-5 xl:py-5">
         <div className="mx-auto w-full max-w-[1400px]">
+          {/* Barra sticky de contexto activo */}
+          <div className="sticky top-16 lg:top-0 z-30 backdrop-blur-md bg-[var(--luma-surface)]/85 border border-white/[0.08] rounded-xl px-4 py-3 shadow-lg mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[#F5D78C] font-semibold">Trabajando:</span>
+              <span className="text-[var(--luma-ivory)] font-medium bg-white/[0.05] px-2 py-0.5 rounded">
+                {VIEW_LABELS[activeView] || activeView}
+              </span>
+              <span className="text-white/20">&middot;</span>
+              <span className="text-[var(--luma-muted)]">Nicho:</span>
+              <span className="text-[var(--luma-ivory)] font-medium">
+                {nicheFilter === "all" ? "Todos" : (nicheFilter === "unknown" ? "Pendiente" : getNicheDefinition(nicheFilter).shortLabel)}
+              </span>
+              <span className="text-white/20">&middot;</span>
+              <span className="text-[var(--luma-muted)]">Lote:</span>
+              <span className="text-[var(--luma-ivory)] font-medium truncate max-w-[180px]" title={state.workspace?.activeBatchName || "Sin lote activo"}>
+                {state.workspace?.activeBatchName || "Sin lote activo"}
+              </span>
+              {visibleLeadsCount !== null && (
+                <>
+                  <span className="text-white/20">&middot;</span>
+                  <span className="text-[#F5D78C] font-medium">{visibleLeadsCount} leads visibles</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-[var(--luma-muted)] min-w-0">
+              <Filter size={12} className="text-[#C7A45A] shrink-0" />
+              <span className="shrink-0">Filtros:</span>
+              <span className="text-[var(--luma-ivory)] font-medium truncate max-w-[200px] sm:max-w-[300px]" title={activeFiltersLabel}>
+                {activeFiltersLabel}
+              </span>
+            </div>
+          </div>
+
           <header className="luma-hero">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-2">
